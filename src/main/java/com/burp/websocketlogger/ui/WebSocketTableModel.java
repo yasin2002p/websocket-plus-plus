@@ -11,11 +11,11 @@ import java.util.List;
 
 public class WebSocketTableModel extends AbstractTableModel {
     public static final String[] COLUMN_NAMES = {
-            "#", "Time", "Direction", "Tool", "Host", "Path", "Type", "Length", "Preview", "Comment"
+            "#", "Time", "Direction", "Tool", "Host", "Path", "Type", "Length", "Security / Tag", "Preview", "Comment"
     };
 
     public static final Class<?>[] COLUMN_CLASSES = {
-            Integer.class, String.class, String.class, String.class, String.class, String.class, String.class, Integer.class, String.class, String.class
+            Integer.class, String.class, String.class, String.class, String.class, String.class, String.class, Integer.class, String.class, String.class, String.class
     };
 
     private final List<WebSocketLogEntry> allEntries = Collections.synchronizedList(new ArrayList<>());
@@ -167,20 +167,21 @@ public class WebSocketTableModel extends AbstractTableModel {
             case 5: return entry.getPath();
             case 6: return entry.getType();
             case 7: return entry.getLength();
-            case 8: return entry.getPreview(150);
-            case 9: return entry.getComment();
+            case 8: return entry.getSecurityTags();
+            case 9: return entry.getPreview(150);
+            case 10: return entry.getComment();
             default: return "";
         }
     }
 
     @Override
     public boolean isCellEditable(int rowIndex, int columnIndex) {
-        return columnIndex == 9; // Allow in-place editing of Comment column
+        return columnIndex == 10; // Allow in-place editing of Comment column
     }
 
     @Override
     public void setValueAt(Object aValue, int rowIndex, int columnIndex) {
-        if (columnIndex == 9) {
+        if (columnIndex == 10) {
             WebSocketLogEntry entry = getEntryAt(rowIndex);
             if (entry != null) {
                 entry.setComment(aValue != null ? aValue.toString() : "");

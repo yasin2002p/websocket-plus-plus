@@ -166,6 +166,11 @@ public interface QueryNode {
                 case "connection":
                     return matchNumeric(entry.getConnectionId());
 
+                case "tag":
+                case "tags":
+                case "security":
+                    return matchString(entry.getSecurityTags());
+
                 default:
                     return false;
             }

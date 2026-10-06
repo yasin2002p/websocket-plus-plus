@@ -49,6 +49,22 @@ public class WebSocketTableRenderer extends DefaultTableCellRenderer {
                 }
                 setFont(getFont().deriveFont(Font.BOLD));
             }
+
+            // Security / Tag column styling (Column 8)
+            if (column == 8) {
+                String tags = entry.getSecurityTags();
+                setText(tags);
+                if (!tags.isEmpty() && !isSelected) {
+                    if (tags.contains("Error")) {
+                        setForeground(Color.RED.darker());
+                    } else if (tags.contains("Token") || tags.contains("Secret") || tags.contains("Key")) {
+                        setForeground(new Color(180, 100, 0)); // Dark Amber
+                    } else if (tags.contains("PII")) {
+                        setForeground(new Color(0, 102, 204)); // Dark Blue
+                    }
+                    setFont(getFont().deriveFont(Font.BOLD));
+                }
+            }
         }
 
         return c;

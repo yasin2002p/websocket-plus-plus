@@ -349,12 +349,12 @@ public class FullTestSuite {
         check(model.getValueAt(0, 0).equals(1), "Column 0 is ID 1");
         check(model.getValueAt(0, 2).equals("Client -> Server"), "Column 2 is Client -> Server");
         check(model.getValueAt(1, 2).equals("Server -> Client"), "Column 2 is Server -> Client");
-        check(model.getValueAt(0, 8).equals("msg1"), "Column 8 is preview msg1");
+        check(model.getValueAt(0, 9).equals("msg1"), "Column 9 is preview msg1");
 
         // In-place Comment editing
-        check(model.isCellEditable(0, 9), "Comment column is editable");
+        check(model.isCellEditable(0, 10), "Comment column is editable");
         check(!model.isCellEditable(0, 0), "ID column is not editable");
-        model.setValueAt("New note", 0, 9);
+        model.setValueAt("New note", 0, 10);
         check(e1.getComment().equals("New note"), "Comment value updated via setValueAt");
 
         // Dynamic filtering in model
@@ -859,6 +859,68 @@ public class FullTestSuite {
 
             dualDialog.dispose();
         });
+
+        // --- TEST 9: PayloadBeautifier & JWT/Base64 Decoded Inspector ---
+        String rawMinifiedJson = "{\"status\":\"ok\",\"user\":{\"id\":10,\"role\":\"admin\"},\"tags\":[\"sec\",\"pentest\"]}";
+        String beautifiedJson = com.burp.websocketlogger.analysis.PayloadBeautifier.beautify(rawMinifiedJson);
+        check(beautifiedJson.contains("\n  \"status\": \"ok\""), "Beautifier properly indents JSON with newlines and 2 spaces");
+        check(beautifiedJson.contains("  \"user\": {\n"), "Beautifier formats nested objects cleanly");
+
+        // Socket.io formatted packet
+        String socketIoPacket = "42[\"chat\",{\"msg\":\"hello\"}]";
+        String beautifiedSocketIo = com.burp.websocketlogger.analysis.PayloadBeautifier.beautify(socketIoPacket);
+        check(beautifiedSocketIo.contains("Socket.io frame"), "Beautifier recognizes and handles Socket.io packet prefix");
+
+        // JWT Token detection and decoding
+        String fakeJwt = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkFsaWNlIiwicm9sZSI6ImFkbWluIn0.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c";
+        String jwtPayload = "{\"auth_token\":\"" + fakeJwt + "\"}";
+        String decodedInspection = com.burp.websocketlogger.analysis.PayloadBeautifier.decodeInspect(jwtPayload);
+        check(decodedInspection.contains("JWT Token #1"), "Decoder identifies JWT token");
+        check(decodedInspection.contains("\"name\": \"Alice\""), "Decoder unpacks and formats JWT payload claims");
+        check(decodedInspection.contains("\"role\": \"admin\""), "Decoder reveals admin role in JWT claim");
+
+        // --- TEST 10: SecurityScanner (Passive Token, PII & Server Error Detection) ---
+        WebSocketLogEntry jwtEntry = new WebSocketLogEntry(
+                301, 1, "Proxy", DirectionType.SERVER_TO_CLIENT, "Text",
+                "app.com", 443, "/ws", "wss://app.com/ws",
+                createMockByteArray(jwtPayload), jwtPayload, null
+        );
+        check(jwtEntry.getSecurityTags().contains("Token"), "SecurityScanner tags JWT entry with 🔑 Token");
+
+        String piiPayload = "{\"user\":\"john\",\"email\":\"john.doe@target.com\",\"phone\":\"09123456789\"}";
+        WebSocketLogEntry piiEntry = new WebSocketLogEntry(
+                302, 1, "Proxy", DirectionType.SERVER_TO_CLIENT, "Text",
+                "app.com", 443, "/ws", "wss://app.com/ws",
+                createMockByteArray(piiPayload), piiPayload, null
+        );
+        check(piiEntry.getSecurityTags().contains("PII"), "SecurityScanner tags entry containing email and phone with 👤 PII");
+
+        String errorPayload = "{\"error\":\"Fatal error: Unhandled Exception in thread main: NullPointerException at com.app.Service\"}";
+        WebSocketLogEntry errorEntry = new WebSocketLogEntry(
+                303, 1, "Proxy", DirectionType.SERVER_TO_CLIENT, "Text",
+                "app.com", 443, "/ws", "wss://app.com/ws",
+                createMockByteArray(errorPayload), errorPayload, null
+        );
+        check(errorEntry.getSecurityTags().contains("Error"), "SecurityScanner tags server exception leak with ⚠ Error");
+
+        // Query filtering by security tags
+        FilterEngine feTag = new FilterEngine(null);
+        check(testQuery(feTag, jwtEntry, "tag contains \"Token\""), "Query 'tag contains \"Token\"' matches JWT message");
+        check(!testQuery(feTag, piiEntry, "tag contains \"Token\""), "Query 'tag contains \"Token\"' rejects PII message");
+        check(testQuery(feTag, piiEntry, "tag contains \"PII\""), "Query 'tag contains \"PII\"' matches PII message");
+        check(testQuery(feTag, errorEntry, "tag contains \"Error\""), "Query 'tag contains \"Error\"' matches Error message");
+
+        // --- TEST 11: Send to Repeater & Intruder Bridge Verification ---
+        HttpRequest mockHandshake = createMock(HttpRequest.class, (p, m, a) -> {
+            if (m.getName().equals("toString")) return "GET /ws HTTP/1.1\r\nHost: target.com\r\n\r\n";
+            return null;
+        });
+        WebSocketLogEntry repeaterTestEntry = new WebSocketLogEntry(
+                304, 1, "Proxy", DirectionType.CLIENT_TO_SERVER, "Text",
+                "target.com", 443, "/ws", "wss://target.com/ws",
+                createMockByteArray("{\"action\":\"test\"}"), "{\"action\":\"test\"}", mockHandshake
+        );
+        check(repeaterTestEntry.getUpgradeRequest() != null, "WebSocketLogEntry holds handshake upgrade request");
 
         // Verify Help Dialog can construct and display without errors if not headless
         if (!GraphicsEnvironment.isHeadless()) {
