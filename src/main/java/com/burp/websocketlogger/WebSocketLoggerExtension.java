@@ -23,10 +23,10 @@ public class WebSocketLoggerExtension implements BurpExtension {
 
     @Override
     public void initialize(MontoyaApi api) {
-        api.extension().setName("WebSocket Logger++");
+        api.extension().setName("WebSocket++");
 
         tab = new WebSocketLoggerTab(api);
-        api.userInterface().registerSuiteTab("WebSocket Logger++", tab);
+        api.userInterface().registerSuiteTab("WebSocket++", tab);
 
         // 1. Start live background 250ms synchronizer with Burp Proxy WebSockets history
         // This guarantees that any and all traffic appearing in Proxy -> WebSockets history
@@ -204,7 +204,7 @@ public class WebSocketLoggerExtension implements BurpExtension {
             api.logging().logToError("Could not register application WebSocket created handler: " + e.getMessage());
         }
 
-        api.logging().logToOutput("WebSocket Logger++ initialized successfully.");
+        api.logging().logToOutput("WebSocket++ initialized successfully.");
     }
 
     private TextMessageReceivedAction safeContinueProxyTextMessage(InterceptedTextMessage msg) {

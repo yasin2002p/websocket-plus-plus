@@ -1,18 +1,18 @@
-# WebSocket Logger++ (Burp Suite Extension)
+# WebSocket++ (Burp Suite Extension)
 
 [![Burp Suite](https://img.shields.io/badge/Burp%20Suite-2023.x%20--%202026.x-orange.svg)](https://portswigger.net/burp)
 [![Java](https://img.shields.io/badge/Java-17%20--%2022%2B-blue.svg)](https://openjdk.org/)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Release](https://img.shields.io/badge/Release-v1.0.0-brightgreen.svg)](WebSocketLogger-1.0.0.jar)
+[![Release](https://img.shields.io/badge/Release-v1.0.0-brightgreen.svg)](websocket-plus-plus-1.0.0.jar)
 
-**WebSocket Logger++** is a high-performance, real-time logging and query extension for **Burp Suite Professional and Community editions**, developed using the modern **Montoya API**.
+**WebSocket++** is a high-performance, real-time logging and query extension for **Burp Suite Professional and Community editions**, developed using the modern **Montoya API**.
 
-Inspired by the acclaimed **Logger++** extension for HTTP traffic, **WebSocket Logger++** brings that same level of deep inspection, customizable querying, and filtering to full-duplex **WebSocket (WS/WSS)** traffic.
+Inspired by the acclaimed **Logger++** extension for HTTP traffic, **WebSocket++** brings that same level of deep inspection, customizable querying, and filtering to full-duplex **WebSocket (WS/WSS)** traffic.
 
 ---
 
 ## Table of Contents
-- [Why WebSocket Logger++?](#why-websocket-logger)
+- [Why WebSocket++?](#why-websocket)
 - [Key Features](#key-features)
 - [UI & Architecture Overview](#ui--architecture-overview)
 - [Query & Filter Engine](#query--filter-engine)
@@ -24,14 +24,14 @@ Inspired by the acclaimed **Logger++** extension for HTTP traffic, **WebSocket L
 
 ---
 
-## Why WebSocket Logger++?
+## Why WebSocket++?
 
 Modern single-page applications (SPAs), trading platforms, real-time chats, and collaboration suites heavily rely on WebSockets. However, analyzing high-volume WebSocket streams inside standard proxy tools often presents challenges:
 - High noise from persistent keepalives, ping/pong heartbeats, and telemetry frames.
 - Inability to execute complex boolean or regex queries across WebSocket payloads.
 - Difficulty isolating outgoing client requests from incoming server pushes.
 
-**WebSocket Logger++** resolves these issues by delivering an enterprise-grade query engine with sub-millisecond execution, native Burp message inspectors, smart table sorting, and zero-drop sequential background synchronization.
+**WebSocket++** resolves these issues by delivering an enterprise-grade query engine with sub-millisecond execution, native Burp message inspectors, smart table sorting, and zero-drop sequential background synchronization.
 
 ---
 
@@ -149,7 +149,7 @@ Modern single-page applications (SPAs), trading platforms, real-time chats, and 
    - **Extension type**: Select `Java`.
    - **Extension file (.jar)**: Choose `WebSocketLogger-1.0.0.jar`.
 5. Click **Next**.
-6. The **WebSocket Logger++** tab will appear in the main Burp navigation bar.
+6. The **WebSocket++** tab will appear in the main Burp navigation bar.
 
 ---
 

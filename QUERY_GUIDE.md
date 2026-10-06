@@ -1,6 +1,6 @@
-# WebSocket Logger++ Query Syntax & Filtering Guide
+# WebSocket++ Query Syntax & Filtering Guide
 
-This document is the comprehensive reference guide for creating filters and queries in **WebSocket Logger++**.
+This document is the comprehensive reference guide for creating filters and queries in **WebSocket++**.
 
 ---
 

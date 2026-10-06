@@ -7,7 +7,7 @@ import java.awt.*;
 public class QueryHelpDialog extends JDialog {
 
     public QueryHelpDialog(Window parent) {
-        super(parent, "WebSocket Logger++ - Query Syntax Guide", ModalityType.APPLICATION_MODAL);
+        super(parent, "WebSocket++ - Query Syntax Guide", ModalityType.APPLICATION_MODAL);
         setDefaultCloseOperation(DISPOSE_ON_CLOSE);
         setSize(750, 560);
         setLocationRelativeTo(parent);
@@ -36,7 +36,7 @@ public class QueryHelpDialog extends JDialog {
 
     private String getHelpTextHtml() {
         return "<html><body style='font-family: sans-serif; font-size: 11pt; padding: 10px;'>"
-                + "<h2 style='color: #FF6633;'>WebSocket Logger++ Query Syntax</h2>"
+                + "<h2 style='color: #FF6633;'>WebSocket++ Query Syntax</h2>"
                 + "<p>You can query WebSocket frames using field operators, logic operators, or plain text searches.</p>"
                 + "<h3>Supported Fields</h3>"
                 + "<ul>"

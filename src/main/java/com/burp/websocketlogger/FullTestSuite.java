@@ -56,7 +56,7 @@ public class FullTestSuite {
 
     public static void main(String[] args) throws Exception {
         System.out.println("=================================================");
-        System.out.println("STARTING COMPREHENSIVE WEBSOCKET LOGGER++ TESTS");
+        System.out.println("STARTING COMPREHENSIVE WEBSOCKET++ TESTS");
         System.out.println("=================================================");
 
         testModelAndHeartbeats();
@@ -500,8 +500,8 @@ public class FullTestSuite {
         WebSocketLoggerExtension extension = new WebSocketLoggerExtension();
         extension.initialize(mockApi);
 
-        check("WebSocket Logger++".equals(registeredExtName.get()), "Extension name registered properly: " + registeredExtName.get());
-        check("WebSocket Logger++".equals(registeredTabTitle.get()), "Suite tab registered with title: " + registeredTabTitle.get());
+        check("WebSocket++".equals(registeredExtName.get()), "Extension name registered properly: " + registeredExtName.get());
+        check("WebSocket++".equals(registeredTabTitle.get()), "Suite tab registered with title: " + registeredTabTitle.get());
         check(registeredTabComponent.get() instanceof WebSocketLoggerTab, "Registered tab component is WebSocketLoggerTab");
         check(capturedProxyWsHandler.get() != null, "ProxyWebSocketCreationHandler registered with Proxy service");
         check(capturedWsHandler.get() != null, "WebSocketCreatedHandler registered with WebSockets service");

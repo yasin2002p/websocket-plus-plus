@@ -22,7 +22,7 @@ dependencies {
 jar {
     manifest {
         attributes(
-            'Extension-Name': 'WebSocket Logger++',
+            'Extension-Name': 'WebSocket++',
             'Extension-Version': project.version
         )
     }
