@@ -922,6 +922,10 @@ public class FullTestSuite {
         );
         check(repeaterTestEntry.getUpgradeRequest() != null, "WebSocketLogEntry holds handshake upgrade request");
 
+        // --- TEST 12: Decoder & Comparer Payload Verification ---
+        check(repeaterTestEntry.getPayload() != null && repeaterTestEntry.getPayload().length() > 0, "LogEntry has valid byte payload for Decoder/Comparer");
+        check(repeaterTestEntry.getPayloadText().equals("{\"action\":\"test\"}"), "LogEntry string representation matches for Decoder/Comparer");
+
         // Verify Help Dialog can construct and display without errors if not headless
         if (!GraphicsEnvironment.isHeadless()) {
             QueryHelpDialog helpDialog = new QueryHelpDialog(null);

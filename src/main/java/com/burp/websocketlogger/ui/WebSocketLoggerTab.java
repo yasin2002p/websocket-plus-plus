@@ -663,6 +663,32 @@ public class WebSocketLoggerTab extends JPanel {
         });
         popupMenu.add(sendToIntruderItem);
 
+        // Send to Decoder
+        JMenuItem sendToDecoderItem = new JMenuItem("Send to Decoder");
+        sendToDecoderItem.addActionListener(e -> {
+            int row = table.getSelectedRow();
+            if (row != -1) {
+                WebSocketLogEntry entry = tableModel.getEntryAt(table.convertRowIndexToModel(row));
+                if (entry != null) {
+                    sendEntryToDecoder(entry);
+                }
+            }
+        });
+        popupMenu.add(sendToDecoderItem);
+
+        // Send to Comparer
+        JMenuItem sendToComparerItem = new JMenuItem("Send to Comparer");
+        sendToComparerItem.addActionListener(e -> {
+            int row = table.getSelectedRow();
+            if (row != -1) {
+                WebSocketLogEntry entry = tableModel.getEntryAt(table.convertRowIndexToModel(row));
+                if (entry != null) {
+                    sendEntryToComparer(entry);
+                }
+            }
+        });
+        popupMenu.add(sendToComparerItem);
+
         popupMenu.addSeparator();
 
         // Send to Heartbeat Filters item
@@ -800,6 +826,36 @@ public class WebSocketLoggerTab extends JPanel {
             }
         } catch (Exception ex) {
             JOptionPane.showMessageDialog(this, "Could not send to Intruder: " + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    private void sendEntryToDecoder(WebSocketLogEntry entry) {
+        if (entry == null) return;
+        try {
+            burp.api.montoya.core.ByteArray payloadBytes = entry.getPayload();
+            if (payloadBytes != null && payloadBytes.length() > 0) {
+                api.decoder().sendToDecoder(payloadBytes);
+            } else {
+                String text = entry.getPayloadText();
+                api.decoder().sendToDecoder(burp.api.montoya.core.ByteArray.byteArray(text));
+            }
+        } catch (Exception ex) {
+            JOptionPane.showMessageDialog(this, "Could not send to Decoder: " + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    private void sendEntryToComparer(WebSocketLogEntry entry) {
+        if (entry == null) return;
+        try {
+            burp.api.montoya.core.ByteArray payloadBytes = entry.getPayload();
+            if (payloadBytes != null && payloadBytes.length() > 0) {
+                api.comparer().sendToComparer(payloadBytes);
+            } else {
+                String text = entry.getPayloadText();
+                api.comparer().sendToComparer(burp.api.montoya.core.ByteArray.byteArray(text));
+            }
+        } catch (Exception ex) {
+            JOptionPane.showMessageDialog(this, "Could not send to Comparer: " + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
         }
     }
 

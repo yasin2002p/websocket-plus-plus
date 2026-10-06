@@ -67,7 +67,7 @@ Modern single-page applications (SPAs), trading platforms, real-time chats, and 
   - Automatically flags **👤 PII** (emails, phone numbers, national IDs).
   - Automatically flags **⚠ Server Errors** (SQL exceptions, stack traces, unhandled exceptions).
   - Dynamic soft highlighting with color tags in the table and query support via `tag contains "Token"` or `tag == pii`.
-- **Send to Repeater & Intruder**: Right-click any WebSocket frame to bridge its handshake request directly to Burp Repeater or Burp Intruder, while copying the frame payload to your clipboard for instant tampering and replay.
+- **Send to Repeater, Intruder, Decoder & Comparer**: Right-click any WebSocket frame to bridge its handshake request directly to Burp Repeater or Burp Intruder (with frame payload copied to clipboard), or send the raw frame directly into Burp Decoder and Burp Comparer for binary/text analysis and diffing.
 - **One-Click Direction Filters**: Instantly toggle `Outgoing (Client)` or `Incoming (Server)` streams.
 - **Smart Heartbeat Filtering & Custom Rules**:
   - Automatically hides common standard heartbeats (`2`, `3`, `ping`, `pong`, `{"type":"ping"}`, etc.).
@@ -75,7 +75,7 @@ Modern single-page applications (SPAs), trading platforms, real-time chats, and 
   - **Heartbeat Rules Manager (`⚙ Rules`)**: Dedicated manager to add, edit, enable/disable, and delete custom heartbeat filtering rules at any time.
 - **In Scope Only**: Automatically filters traffic against Burp's target scope rules.
 - **Exporting**: Export filtered or complete datasets to standard **CSV** and **JSON** files.
-- **Context Actions**: Right-click to Send to Repeater, Send to Intruder, copy payload, copy WebSocket URL, copy handshake, send to heartbeat filters, or add colored comments.
+- **Context Actions**: Right-click to Send to Repeater, Send to Intruder, Send to Decoder, Send to Comparer, copy payload, copy WebSocket URL, copy handshake, send to heartbeat filters, or add colored comments.
 
 ---
 
