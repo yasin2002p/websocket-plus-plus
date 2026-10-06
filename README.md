@@ -141,13 +141,13 @@ Modern single-page applications (SPAs), trading platforms, real-time chats, and 
 ### Option 1: Load Pre-Built JAR (Recommended)
 1. Download or locate the compiled JAR:
    ```
-   WebSocketLogger-1.0.0.jar
+   websocket-plus-plus-1.0.0.jar
    ```
 2. Open **Burp Suite**.
 3. Navigate to **Extensions** -> **Installed**.
 4. Click **Add**:
    - **Extension type**: Select `Java`.
-   - **Extension file (.jar)**: Choose `WebSocketLogger-1.0.0.jar`.
+   - **Extension file (.jar)**: Choose `websocket-plus-plus-1.0.0.jar`.
 5. Click **Next**.
 6. The **WebSocket++** tab will appear in the main Burp navigation bar.
 
@@ -174,7 +174,7 @@ gradle build
 mvn clean package
 ```
 
-The resulting artifact will be generated in `WebSocketLogger-1.0.0.jar` (or `target/` / `build/libs/`).
+The resulting artifact will be generated in `websocket-plus-plus-1.0.0.jar` (or `target/` / `build/libs/`).
 
 ---
 

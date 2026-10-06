@@ -39,6 +39,5 @@ if ($LASTEXITCODE -ne 0) {
     Write-Error "Packaging JAR failed!"
     exit 1
 }
-Copy-Item "websocket-plus-plus-1.0.0.jar" -Destination "WebSocketLogger-1.0.0.jar" -Force
 
 Write-Host "[OK] Successfully built: websocket-plus-plus-1.0.0.jar" -ForegroundColor Green
