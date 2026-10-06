@@ -701,17 +701,19 @@ public class WebSocketLoggerTab extends JPanel {
     private void sendToHeartbeatFilters(WebSocketLogEntry entry) {
         if (entry == null) return;
 
-        String generatedQuery = com.burp.websocketlogger.query.HeartbeatAnalyzer.generateQuery(entry);
+        String payloadQuery = com.burp.websocketlogger.query.HeartbeatAnalyzer.generatePayloadQuery(entry);
+        String lengthQuery = com.burp.websocketlogger.query.HeartbeatAnalyzer.generateLengthQuery(entry);
+
         String defaultName = "Rule " + (filterEngine.getHeartbeatRules().size() + 1) + " (" + entry.getDirection().getDisplayName() + ")";
         com.burp.websocketlogger.model.HeartbeatRule proposedRule = new com.burp.websocketlogger.model.HeartbeatRule(
                 java.util.UUID.randomUUID().toString(),
                 defaultName,
-                generatedQuery,
+                payloadQuery,
                 true
         );
 
         Window win = SwingUtilities.getWindowAncestor(this);
-        HeartbeatRuleEditDialog editDialog = new HeartbeatRuleEditDialog(win, proposedRule, true);
+        HeartbeatRuleEditDialog editDialog = new HeartbeatRuleEditDialog(win, proposedRule, true, payloadQuery, lengthQuery);
         editDialog.setVisible(true);
 
         if (editDialog.isSaved()) {

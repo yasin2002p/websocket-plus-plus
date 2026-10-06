@@ -11,19 +11,29 @@ import java.awt.*;
 
 public class HeartbeatRuleEditDialog extends JDialog {
     private final HeartbeatRule rule;
+    private final String payloadOptionQuery;
+    private final String lengthOptionQuery;
     private boolean saved = false;
 
     private JTextField nameField;
+    private JRadioButton byPayloadRadio;
+    private JRadioButton byLengthRadio;
     private JTextArea queryArea;
     private JCheckBox enabledCheckBox;
     private JLabel statusLabel;
 
     public HeartbeatRuleEditDialog(Window parent, HeartbeatRule rule, boolean isNew) {
+        this(parent, rule, isNew, null, null);
+    }
+
+    public HeartbeatRuleEditDialog(Window parent, HeartbeatRule rule, boolean isNew, String payloadOptionQuery, String lengthOptionQuery) {
         super(parent, isNew ? "Add Heartbeat Filter Rule" : "Edit Heartbeat Filter Rule", ModalityType.APPLICATION_MODAL);
         this.rule = rule;
+        this.payloadOptionQuery = payloadOptionQuery;
+        this.lengthOptionQuery = lengthOptionQuery;
 
         initComponents();
-        setSize(580, 360);
+        setSize(600, 420);
         setLocationRelativeTo(parent);
     }
 
@@ -37,28 +47,60 @@ public class HeartbeatRuleEditDialog extends JDialog {
         gbc.fill = GridBagConstraints.HORIZONTAL;
         gbc.insets = new Insets(4, 4, 4, 4);
 
+        int gridy = 0;
+
         // Row 1: Rule Name
-        gbc.gridx = 0; gbc.gridy = 0; gbc.weightx = 0.0;
+        gbc.gridx = 0; gbc.gridy = gridy; gbc.weightx = 0.0;
         formPanel.add(new JLabel("Rule Name:"), gbc);
 
-        gbc.gridx = 1; gbc.gridy = 0; gbc.weightx = 1.0;
+        gbc.gridx = 1; gbc.gridy = gridy; gbc.weightx = 1.0;
         nameField = new JTextField(rule.getName());
         formPanel.add(nameField, gbc);
+        gridy++;
 
-        // Row 2: Active toggle
-        gbc.gridx = 0; gbc.gridy = 1; gbc.weightx = 0.0;
+        // Row 2: Filter Strategy (By Message/Payload vs By Length) - shown if options provided
+        if (payloadOptionQuery != null && lengthOptionQuery != null) {
+            gbc.gridx = 0; gbc.gridy = gridy; gbc.weightx = 0.0;
+            formPanel.add(new JLabel("Filter By:"), gbc);
+
+            gbc.gridx = 1; gbc.gridy = gridy; gbc.weightx = 1.0;
+            JPanel radioPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 0));
+            byPayloadRadio = new JRadioButton("Message Content (Payload)", true);
+            byLengthRadio = new JRadioButton("Frame Length (Bytes)", false);
+            ButtonGroup group = new ButtonGroup();
+            group.add(byPayloadRadio);
+            group.add(byLengthRadio);
+            radioPanel.add(byPayloadRadio);
+            radioPanel.add(byLengthRadio);
+            formPanel.add(radioPanel, gbc);
+            gridy++;
+
+            byPayloadRadio.addActionListener(e -> {
+                queryArea.setText(payloadOptionQuery);
+                validateQuery();
+            });
+
+            byLengthRadio.addActionListener(e -> {
+                queryArea.setText(lengthOptionQuery);
+                validateQuery();
+            });
+        }
+
+        // Row 3: Active toggle
+        gbc.gridx = 0; gbc.gridy = gridy; gbc.weightx = 0.0;
         formPanel.add(new JLabel("Active:"), gbc);
 
-        gbc.gridx = 1; gbc.gridy = 1; gbc.weightx = 1.0;
+        gbc.gridx = 1; gbc.gridy = gridy; gbc.weightx = 1.0;
         enabledCheckBox = new JCheckBox("Enable this rule", rule.isEnabled());
         formPanel.add(enabledCheckBox, gbc);
+        gridy++;
 
-        // Row 3: Query Area
-        gbc.gridx = 0; gbc.gridy = 2; gbc.weightx = 0.0;
+        // Row 4: Query Area
+        gbc.gridx = 0; gbc.gridy = gridy; gbc.weightx = 0.0;
         gbc.anchor = GridBagConstraints.NORTHWEST;
         formPanel.add(new JLabel("Filter Query:"), gbc);
 
-        gbc.gridx = 1; gbc.gridy = 2; gbc.weightx = 1.0; gbc.weighty = 1.0;
+        gbc.gridx = 1; gbc.gridy = gridy; gbc.weightx = 1.0; gbc.weighty = 1.0;
         gbc.fill = GridBagConstraints.BOTH;
         queryArea = new JTextArea(rule.getQuery(), 4, 30);
         queryArea.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
@@ -66,9 +108,10 @@ public class HeartbeatRuleEditDialog extends JDialog {
         queryArea.setWrapStyleWord(true);
         JScrollPane queryScroll = new JScrollPane(queryArea);
         formPanel.add(queryScroll, gbc);
+        gridy++;
 
-        // Row 4: Status validation
-        gbc.gridx = 1; gbc.gridy = 3; gbc.weighty = 0.0; gbc.fill = GridBagConstraints.HORIZONTAL;
+        // Row 5: Status validation
+        gbc.gridx = 1; gbc.gridy = gridy; gbc.weighty = 0.0; gbc.fill = GridBagConstraints.HORIZONTAL;
         statusLabel = new JLabel("✓ Valid syntax");
         statusLabel.setForeground(new Color(34, 139, 34));
         formPanel.add(statusLabel, gbc);
@@ -143,5 +186,17 @@ public class HeartbeatRuleEditDialog extends JDialog {
 
     public HeartbeatRule getRule() {
         return rule;
+    }
+
+    public JRadioButton getByPayloadRadio() {
+        return byPayloadRadio;
+    }
+
+    public JRadioButton getByLengthRadio() {
+        return byLengthRadio;
+    }
+
+    public JTextArea getQueryArea() {
+        return queryArea;
     }
 }
