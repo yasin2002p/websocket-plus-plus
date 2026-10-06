@@ -4,7 +4,7 @@
     <modelVersion>4.0.0</modelVersion>
 
     <groupId>com.burp</groupId>
-    <artifactId>websocket-logger-plus-plus</artifactId>
+    <artifactId>websocket-plus-plus</artifactId>
     <version>1.0.0</version>
     <packaging>jar</packaging>
 
