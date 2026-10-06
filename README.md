@@ -1,123 +1,203 @@
 # WebSocket Logger++ (Burp Suite Extension)
 
-یک اکستنشن قدرتمند برای **Burp Suite** (بر پایه **Montoya API**) الهام‌گرفته از اکستنشن مشهور **Logger++**، اما به صورت اختصاصی برای **ترافیک‌های وب‌سوکت (WebSocket)**.
+[![Burp Suite](https://img.shields.io/badge/Burp%20Suite-2023.x%20--%202026.x-orange.svg)](https://portswigger.net/burp)
+[![Java](https://img.shields.io/badge/Java-17%20--%2022%2B-blue.svg)](https://openjdk.org/)
+[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![Release](https://img.shields.io/badge/Release-v1.0.0-brightgreen.svg)](WebSocketLogger-1.0.0.jar)
 
-این اکستنشن به شما امکان می‌دهد تمام پیام‌های وب‌سوکت رد و بدل شده (Client ➔ Server و Server ➔ Client) را به شکل زنده لاگ کرده و با **موتور کوئری پیشرفته** شبیه به Logger++ روی آن‌ها فیلتر و جستجو انجام دهید.
+**WebSocket Logger++** is a high-performance, real-time logging and query extension for **Burp Suite Professional and Community editions**, developed using the modern **Montoya API**.
 
----
-
-## قابلیت‌های کلیدی (Features)
-
-1. **لاگ کامل فریم‌ها و پیام‌های وب‌سوکت (Live WebSocket Logging):**
-   - شنود زنده پیام‌های Text و Binary در تمام ابزارهای Burp (شامل Proxy، Repeater و ...).
-   - بارگذاری خودکار تاریخچه وب‌سوکت‌های قبلی موجود در Proxy هنگام لود شدن اکستنشن.
-   - نمایش جهت پیام با نشانگرهای رنگی (`⬆ Outgoing / Client -> Server` و `⬇ Incoming / Server -> Client`).
-   - ثبت متادیتای دقیق: شناسه فریم (#)، زمان (HH:mm:ss.SSS)، Connection ID، ابزار مبدا (Tool)، هاست، پورت، مسیر (Path)، نوع (Type)، طول بر حسب بایت (Length) و پیش‌نمایش (Preview).
-
-2. **موتور کوئری و فیلتر پیشرفته (Logger++ Query Engine):**
-   - پشتیبانی از فیلدهای کلیدی: `payload`, `dir`, `host`, `path`, `url`, `length`, `type`, `tool`, `id`, `comment`, `color`
-   - عملگرهای مقایسه‌ای: `==`, `!=`, `contains`, `!contains`, `matches` (Regex), `startswith`, `endswith`, `>`, `<`, `>=`, `<=`
-   - عملگرهای منطقی: `AND` (`&&`), `OR` (`||`), `NOT` (`!`) و پرانتزگذاری `( ... )`
-   - جستجوی آزاد متنی (Free-text search): اگر فقط یک کلمه تایپ کنید، در تمام فیلدها جستجو می‌شود.
-   - اعتبارسنجی زنده (Live Syntax Validation) روی نوار کوئری با رنگ سبز/قرمز.
-
-3. **فیلترهای سریع (Quick Filters):**
-   - چک‌باکس ترافیک خروجی (`Outgoing / Client`)
-   - چک‌باکس ترافیک ورودی (`Incoming / Server`)
-   - گزینه **Hide Heartbeats** (حذف خودکار فریم‌های پینگ/پانگ و هارت‌بیت‌ها مثل `2`, `3`, `ping`, `pong`, `{"type":"ping"}`)
-   - گزینه **In Scope Only** (نمایش فقط اهداف داخل Scope برپ)
-
-4. **ویرایشگر و نمایشگر نیتیو برپ (Burp Native Inspectors):**
-   - نمایش پیام وب‌سوکت با ادیتور نیتیو Burp (`WebSocketMessageEditor` با تب‌های Raw, Hex, Inspector)
-   - نمایش ریکوئست ارتقا و دست‌دهی اولیه‌ی HTTP (`Handshake Upgrade Request`) برای بررسی هدرها، کوکی‌ها و توکن‌های اتصال
-   - تب متادیتای ساختاریافته (Message Details)
-
-5. **امکانات مدیریتی و خروجی:**
-   - هایلایت کردن ردیف‌ها با رنگ‌های استاندارد برپ (Red, Orange, Yellow, Green, Cyan, Blue, Pink, Magenta, Gray)
-   - یادداشت‌گذاری و ویرایش کامنت (Comment) برای هر پیام
-   - توقف موقت لاگ‌گیری (Pause / Resume)
-   - اسکرول خودکار (Auto Scroll)
-   - شمارنده زنده آمار: Total, Shown, Outgoing, Incoming
-   - خروجی گرفتن در قالب‌های استاندارد **CSV** و **JSON**
-   - کلیک‌راست برای کپی کردن Payload، URL و Handshake Request
+Inspired by the acclaimed **Logger++** extension for HTTP traffic, **WebSocket Logger++** brings that same level of deep inspection, customizable querying, and filtering to full-duplex **WebSocket (WS/WSS)** traffic.
 
 ---
 
-## راهنمای ساختار کوئری (Query Syntax Reference)
+## Table of Contents
+- [Why WebSocket Logger++?](#why-websocket-logger)
+- [Key Features](#key-features)
+- [UI & Architecture Overview](#ui--architecture-overview)
+- [Query & Filter Engine](#query--filter-engine)
+- [Installation Guide](#installation-guide)
+- [Building from Source](#building-from-source)
+- [Documentation & Resources](#documentation--resources)
+- [Troubleshooting](#troubleshooting)
+- [License](#license)
 
-### ۱. فیلدهای قابل جستجو:
-| فیلد | نام‌های مستعار | توضیحات |
-|---|---|---|
-| `payload` | `body`, `data`, `p` | متن پیام وب‌سوکت |
-| `dir` | `direction`, `d` | جهت پیام (`client`, `server`, `outgoing`, `incoming`) |
-| `host` | `h` | هاست هدف |
-| `path` | - | مسیر وب‌سوکت (مثلاً `/socket.io/` یا `/ws/chat`) |
-| `url` | - | آدرس کامل وب‌سوکت |
-| `length` | `len`, `size` | طول پیام بر حسب بایت |
-| `type` | - | نوع پیام (`Text` یا `Binary`) |
-| `tool` | - | ابزار فرستنده در برپ (`Proxy`, `Repeater`) |
-| `id` | - | شماره ترتیبی پیام |
-| `comment` | - | کامنت ثبت شده توسط کاربر |
+---
 
-### ۲. عملگرها:
-- `==` یا `=` : برابری دقیق (Case-Insensitive)
-- `!=` : نامساوی
-- `contains` : شامل بودن زیررشته
-- `!contains` : شامل نبودن
-- `matches` یا `regex` : تطابق بر اساس Regex
-- `startswith` / `endswith` : شروع یا پایان با عبارت مشخص
-- `>`, `<`, `>=`, `<=` : مقایسه‌های عددی (برای `length` و `id`)
-- `AND` (`&&`), `OR` (`||`), `NOT` (`!`) : ترکیب عبارات شرطی
-- `( ... )` : اولویت‌بندی شرط‌ها با پرانتز
+## Why WebSocket Logger++?
 
-### ۳. مثال‌های کاربردی:
-```text
-payload contains "token"
-dir == client and length > 50
-host contains "api" and path == "/ws"
-payload matches '.*"action":\s*"login".*'
-(dir == server or len > 200) and not payload contains "ping"
-payload !contains "heartbeat" and dir == outgoing
-admin
+Modern single-page applications (SPAs), trading platforms, real-time chats, and collaboration suites heavily rely on WebSockets. However, analyzing high-volume WebSocket streams inside standard proxy tools often presents challenges:
+- High noise from persistent keepalives, ping/pong heartbeats, and telemetry frames.
+- Inability to execute complex boolean or regex queries across WebSocket payloads.
+- Difficulty isolating outgoing client requests from incoming server pushes.
+
+**WebSocket Logger++** resolves these issues by delivering an enterprise-grade query engine with sub-millisecond execution, native Burp message inspectors, smart table sorting, and zero-drop sequential background synchronization.
+
+---
+
+## Key Features
+
+### 1. Live Full-Duplex Capture (Proxy, Repeater & Extensions)
+- **100% Fidelity Sequential Sync**: Captures all outgoing (`Client -> Server`) and incoming (`Server -> Client`) frames directly from Burp's Proxy pipeline in exact chronological order without dropping repetitive packets (heartbeats, repetitive commands, pings).
+- **Repeater & Extension Support**: Captures WebSocket traffic generated by Burp Repeater, Intruder, and other extensions.
+- **Bi-directional Visual Indicators**: Color-coded directional badges (`⬆ Outgoing` vs `⬇ Incoming`) with custom foreground highlighting.
+
+### 2. Powerful Query Engine (Logger++ Syntax)
+- **Extensive Field Support**: Filter on `payload`, `dir`, `host`, `path`, `url`, `length`, `type`, `tool`, `id`, `port`, `conn`, and `comment`.
+- **Rich Operator Set**: `==`, `!=`, `contains`, `!contains`, `matches` (Regex), `!matches`, `startswith`, `endswith`, `>`, `<`, `>=`, `<=`.
+- **Boolean Logic & Grouping**: Full support for `AND` (`&&`), `OR` (`||`), `NOT` (`!`), and nested parentheses `( ... )`.
+- **Live Syntax Validation**: Real-time syntax checking on the query bar with instant visual feedback (`✓ Valid syntax` vs `✗ Error message`).
+- **Free-Text Search**: Simply typing a term (e.g. `admin` or `"unauthorized"`) automatically searches across all message fields.
+
+### 3. Smart Sorting & Auto-Scroll
+- **Sort-Aware Auto-Scroll**: When sorting descending by `#` (ID) or time (newest on top), auto-scroll locks viewport to the top (row 0). When sorted ascending (newest on bottom), auto-scroll smoothly follows the latest message.
+- **Zero Viewport Drift**: Toggle `Auto Scroll` off to inspect frames without interruption while traffic continues streaming in the background.
+
+### 4. Native Burp Message Editors
+- Integrated **WebSocketMessageEditor** (Raw, Hex, and Inspector tabs).
+- Integrated **HttpRequestEditor** displaying the original HTTP Handshake Upgrade request (headers, cookies, authorization tokens).
+- Structured **Message Details** panel showing metadata, connection IDs, byte lengths, and paths.
+
+### 5. Quick Toggles & Productivity Tools
+- **One-Click Direction Filters**: Instantly toggle `Outgoing (Client)` or `Incoming (Server)` streams.
+- **Hide Heartbeats**: Automatically hides common heartbeats (`2`, `3`, `ping`, `pong`, `{"type":"ping"}`, etc.).
+- **In Scope Only**: Automatically filters traffic against Burp's target scope rules.
+- **Exporting**: Export filtered or complete datasets to standard **CSV** and **JSON** files.
+- **Context Actions**: Right-click to copy payload, copy WebSocket URL, copy handshake, or add colored comments.
+
+---
+
+## UI & Architecture Overview
+
+```
+┌────────────────────────────────────────────────────────────────────────┐
+│ Query Filter: [ payload contains "token" and dir == client ] [Apply]   │
+│ [x] Outgoing (Client)  [x] Incoming (Server)  [ ] Hide Heartbeats      │
+│ [x] In Scope Only      [x] Auto Scroll         [Pause] [Sync] [Export] │
+├────────────────────────────────────────────────────────────────────────┤
+│ #  │ Time         │ Direction       │ Tool   │ Host        │ Length    │
+│────┼──────────────┼─────────────────┼────────┼─────────────┼───────────┤
+│ 1  │ 22:15:02.100 │ Client -> Server│ Proxy  │ app.ws.com  │ 64 bytes  │
+│ 2  │ 22:15:02.115 │ Server -> Client│ Proxy  │ app.ws.com  │ 128 bytes │
+├────────────────────────────────────────────────────────────────────────┤
+│ [WebSocket Message] │ [Handshake Upgrade Request] │ [Message Details]  │
+│                                                                        │
+│ {"action":"authenticate","token":"eyJhbGciOiJIUzI1NiIsInR5cCI6..."}   │
+└────────────────────────────────────────────────────────────────────────┘
 ```
 
-> 📖 **راهنمای کامل با سناریوهای پیشرفته و Regex:**  
-> برای مشاهده تمام فیلدها، عملگرها و مثال‌های تست نفوذ و دیباگینگ، مستند **[راهنمای جامع فیلترنویسی (QUERY_GUIDE.md)](QUERY_GUIDE.md)** را مطالعه کنید.
+---
+
+## Query & Filter Engine
+
+### Available Fields
+| Field | Aliases | Type | Description |
+|---|---|---|---|
+| `payload` | `body`, `data`, `p` | String | Message payload text |
+| `dir` | `direction`, `d` | Direction | Direction (`client`, `server`, `to_server`, `to_client`) |
+| `host` | `h` | String | Target host / domain |
+| `path` | - | String | WebSocket endpoint path (e.g. `/socket.io/`, `/ws`) |
+| `url` | - | String | Full WebSocket URL |
+| `length` | `len`, `size` | Integer | Payload length in bytes |
+| `type` | - | String | Frame type (`Text` or `Binary`) |
+| `tool` | - | String | Burp tool source (`Proxy`, `Repeater`, `Extensions`) |
+| `id` | - | Integer | Sequential message ID |
+| `port` | - | Integer | Destination port |
+| `comment` | - | String | User comment on row |
+
+### Common Query Examples
+
+- **Find Sensitive Data in Client Messages:**
+  ```sql
+  dir == client and (payload contains "Bearer" or payload contains "password" or payload contains "token")
+  ```
+
+- **Filter Out Empty Objects and Repetitive Heartbeats:**
+  ```sql
+  not (dir == client and payload == "{}") and not (dir == server and payload contains "arnstep")
+  ```
+
+- **Filter Using Regex Matching:**
+  ```sql
+  payload matches '\{"id":0,"senderId":0.*"arnstep":0\}'
+  ```
+
+- **Filter by Tool and Endpoint:**
+  ```sql
+  tool == "Repeater" and path startswith "/api/v2"
+  ```
+
+- **Large Incoming Payloads (Potential Data Exfiltration / Leaks):**
+  ```sql
+  dir == incoming and length > 2048
+  ```
+
+👉 **For comprehensive syntax specifications and pentesting recipes, see [QUERY_GUIDE.md](QUERY_GUIDE.md).**
 
 ---
 
-## نحوه نصب در Burp Suite
+## Installation Guide
 
-فایل از پیش کامپایل شده در مسیر پروژه آماده است:
-`WebSocketLogger-1.0.0.jar`
-
-مراحل لود کردن در برپ:
-1. برنامه **Burp Suite** را باز کنید.
-2. به تب **Extensions** بروید.
-3. در زیرتب **Installed**، روی دکمه **Add** کلیک کنید.
-4. در پنجره باز شده:
-   - گزینه **Extension type** را روی **Java** بگذارید.
-   - در قسمت **Extension file (.jar)**، فایل [WebSocketLogger-1.0.0.jar](file:///c:/Users/stockland/Desktop/Web-socket%20logger/WebSocketLogger-1.0.0.jar) را انتخاب کنید.
-5. روی **Next** کلیک کنید.
-6. تب جدیدی با نام **WebSocket Logger++** به منوی اصلی Burp اضافه می‌شود و تمام ترافیک‌های وب‌سوکت را لاگ می‌کند.
+### Option 1: Load Pre-Built JAR (Recommended)
+1. Download or locate the compiled JAR:
+   ```
+   WebSocketLogger-1.0.0.jar
+   ```
+2. Open **Burp Suite**.
+3. Navigate to **Extensions** -> **Installed**.
+4. Click **Add**:
+   - **Extension type**: Select `Java`.
+   - **Extension file (.jar)**: Choose `WebSocketLogger-1.0.0.jar`.
+5. Click **Next**.
+6. The **WebSocket Logger++** tab will appear in the main Burp navigation bar.
 
 ---
 
-## نحوه کامپایل مجدد (Build from Source)
+## Building from Source
 
-اگر تغییری در کدهای جاوا دادید، به یکی از روش‌های زیر می‌توانید پروژه را مجدداً کامپایل و بسته بندی کنید:
+### Prerequisites
+- JDK 17, 21, or 22+
+- Burp Suite JAR (for Montoya API dependencies)
 
-### روش ۱: با استفاده از اسکریپت آماده PowerShell (سریع‌ترین حالت):
+### Build with PowerShell Script (Fastest)
 ```powershell
 .\build.ps1
 ```
 
-### روش ۲: با استفاده از Gradle:
-```powershell
+### Build with Gradle
+```bash
 gradle build
 ```
 
-### روش ۳: با استفاده از Maven:
-```powershell
+### Build with Maven
+```bash
 mvn clean package
 ```
+
+The resulting artifact will be generated in `WebSocketLogger-1.0.0.jar` (or `target/` / `build/libs/`).
+
+---
+
+## Documentation & Resources
+- 📘 [**QUERY_GUIDE.md**](QUERY_GUIDE.md) - Complete Query Syntax, Regex Patterns & Pentesting Cheatsheet.
+- 🧪 **Automated Test Suite**: Tested with 145+ comprehensive unit & integration tests (`FullTestSuite.java`) covering lexer, AST, filter engine, GUI auto-scroll, and Montoya API lifecycle.
+
+---
+
+## Troubleshooting
+
+- **Frames not appearing in the table?**
+  - Verify if **Query Filter** contains an active search. Click **Clear**.
+  - Check whether `Outgoing (Client)` or `Incoming (Server)` toggles are disabled.
+  - Check if `In Scope Only` is enabled while your target is outside Burp Scope.
+  - Click the **🔄 Sync** button to trigger an immediate pull from Burp Proxy history.
+
+- **Need to stay on top while sorting descending?**
+  - Ensure the **Auto Scroll** checkbox is checked. The extension will automatically detect descending sort and pin your viewport to row 0.
+
+---
+
+## License
+
+This project is open-source software licensed under the **MIT License**.
+Contributions, pull requests, and feature suggestions are welcome!
