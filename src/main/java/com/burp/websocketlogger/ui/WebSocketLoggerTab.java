@@ -34,6 +34,7 @@ public class WebSocketLoggerTab extends JPanel {
     private JTextArea detailsArea;
 
     private JTextField queryField;
+    private JButton historyBtn;
     private JLabel queryValidationLabel;
     private JCheckBox clientCheckBox;
     private JCheckBox serverCheckBox;
@@ -45,6 +46,9 @@ public class WebSocketLoggerTab extends JPanel {
 
     private volatile boolean isLoggingPaused = false;
     private com.burp.websocketlogger.WebSocketHistorySync historySync;
+
+    private static final int MAX_QUERY_HISTORY = 10;
+    private final List<String> recentQueries = new ArrayList<>();
 
     public void setHistorySync(com.burp.websocketlogger.WebSocketHistorySync historySync) {
         this.historySync = historySync;
@@ -78,9 +82,32 @@ public class WebSocketLoggerTab extends JPanel {
         queryTitle.setFont(queryTitle.getFont().deriveFont(Font.BOLD));
         queryRow.add(queryTitle, BorderLayout.WEST);
 
+        // History Popup & Button
         queryField = new JTextField();
-        queryField.setToolTipText("Enter query, e.g. payload contains \"admin\" or (dir == client and length > 50)");
-        queryRow.add(queryField, BorderLayout.CENTER);
+        queryField.setToolTipText("Enter query or click ▾ for recent queries. e.g. payload contains \"admin\"");
+
+        historyBtn = new JButton("▾");
+        historyBtn.setToolTipText("Recent query history (last 10 queries)");
+        historyBtn.setMargin(new Insets(2, 6, 2, 6));
+        historyBtn.setFocusable(false);
+
+        // Show history when historyBtn clicked or when double-clicking / right-clicking / clicking dropdown in query field
+        historyBtn.addActionListener(e -> showQueryHistoryPopup(historyBtn, 0, historyBtn.getHeight()));
+        queryField.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mouseClicked(MouseEvent e) {
+                // If user double-clicks the query field or right clicks, show history popup
+                if (e.getClickCount() == 2 || SwingUtilities.isRightMouseButton(e)) {
+                    showQueryHistoryPopup(queryField, e.getX(), e.getY());
+                }
+            }
+        });
+
+        // Center sub-panel to hold queryField and historyBtn seamlessly
+        JPanel queryInputWrapper = new JPanel(new BorderLayout());
+        queryInputWrapper.add(queryField, BorderLayout.CENTER);
+        queryInputWrapper.add(historyBtn, BorderLayout.EAST);
+        queryRow.add(queryInputWrapper, BorderLayout.CENTER);
 
         JPanel queryActions = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0));
         JButton applyFilterBtn = new JButton("Apply");
@@ -311,6 +338,9 @@ public class WebSocketLoggerTab extends JPanel {
         if (valid) {
             queryValidationLabel.setText("✓ Filter applied");
             queryValidationLabel.setForeground(new Color(34, 139, 34));
+            if (!q.isEmpty()) {
+                saveQueryToHistory(q);
+            }
             tableModel.reapplyFilter();
             updateCounters();
         } else {
@@ -318,6 +348,55 @@ public class WebSocketLoggerTab extends JPanel {
             queryValidationLabel.setText("✗ " + (err != null ? err : "Syntax error"));
             queryValidationLabel.setForeground(Color.RED);
         }
+    }
+
+    private void saveQueryToHistory(String query) {
+        if (query == null || query.trim().isEmpty()) return;
+        String q = query.trim();
+        // Remove if already present so it moves to top (index 0)
+        recentQueries.remove(q);
+        recentQueries.add(0, q);
+        while (recentQueries.size() > MAX_QUERY_HISTORY) {
+            recentQueries.remove(recentQueries.size() - 1);
+        }
+    }
+
+    private void showQueryHistoryPopup(Component invoker, int x, int y) {
+        JPopupMenu popup = new JPopupMenu();
+
+        if (recentQueries.isEmpty()) {
+            JMenuItem emptyItem = new JMenuItem("No recent queries");
+            emptyItem.setEnabled(false);
+            popup.add(emptyItem);
+        } else {
+            JLabel header = new JLabel("  Recent Queries (Max " + MAX_QUERY_HISTORY + "):");
+            header.setFont(header.getFont().deriveFont(Font.BOLD, 11f));
+            header.setForeground(Color.GRAY);
+            popup.add(header);
+            popup.addSeparator();
+
+            for (int i = 0; i < recentQueries.size(); i++) {
+                String historyQuery = recentQueries.get(i);
+                JMenuItem item = new JMenuItem((i + 1) + ". " + historyQuery);
+                item.setToolTipText(historyQuery);
+                item.addActionListener(e -> {
+                    queryField.setText(historyQuery);
+                    applyQuery();
+                });
+                popup.add(item);
+            }
+
+            popup.addSeparator();
+            JMenuItem clearHistoryItem = new JMenuItem("Clear History");
+            clearHistoryItem.addActionListener(e -> recentQueries.clear());
+            popup.add(clearHistoryItem);
+        }
+
+        popup.show(invoker, x, y);
+    }
+
+    public List<String> getRecentQueries() {
+        return new ArrayList<>(recentQueries);
     }
 
     public void addEntry(WebSocketLogEntry entry) {
@@ -606,5 +685,13 @@ public class WebSocketLoggerTab extends JPanel {
 
     public WebSocketTableModel getTableModel() {
         return tableModel;
+    }
+
+    public JTextField getQueryField() {
+        return queryField;
+    }
+
+    public JButton getHistoryBtn() {
+        return historyBtn;
     }
 }

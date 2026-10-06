@@ -46,6 +46,7 @@ Modern single-page applications (SPAs), trading platforms, real-time chats, and 
 - **Extensive Field Support**: Filter on `payload`, `dir`, `host`, `path`, `url`, `length`, `type`, `tool`, `id`, `port`, `conn`, and `comment`.
 - **Rich Operator Set**: `==`, `!=`, `contains`, `!contains`, `matches` (Regex), `!matches`, `startswith`, `endswith`, `>`, `<`, `>=`, `<=`.
 - **Boolean Logic & Grouping**: Full support for `AND` (`&&`), `OR` (`||`), `NOT` (`!`), and nested parentheses `( ... )`.
+- **Query History (Top 10)**: Dropdown button (`▾`) in the query bar stores the 10 most recent queries with automatic deduplication, double-click/right-click quick access, and one-click query recall just like Logger++.
 - **Live Syntax Validation**: Real-time syntax checking on the query bar with instant visual feedback (`✓ Valid syntax` vs `✗ Error message`).
 - **Free-Text Search**: Simply typing a term (e.g. `admin` or `"unauthorized"`) automatically searches across all message fields.
 
