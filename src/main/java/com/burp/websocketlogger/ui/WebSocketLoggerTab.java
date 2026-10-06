@@ -1,6 +1,7 @@
 package com.burp.websocketlogger.ui;
 
 import burp.api.montoya.MontoyaApi;
+import burp.api.montoya.http.message.requests.HttpRequest;
 import burp.api.montoya.ui.editor.EditorOptions;
 import burp.api.montoya.ui.editor.HttpRequestEditor;
 import burp.api.montoya.ui.editor.WebSocketMessageEditor;
@@ -32,6 +33,8 @@ public class WebSocketLoggerTab extends JPanel {
     private WebSocketMessageEditor wsMessageEditor;
     private HttpRequestEditor httpRequestEditor;
     private JTextArea detailsArea;
+    private JTextArea beautifiedArea;
+    private JTextArea decodedArea;
 
     private JTextField queryField;
     private JButton historyBtn;
@@ -282,15 +285,16 @@ public class WebSocketLoggerTab extends JPanel {
 
         // Set column preferred widths
         table.getColumnModel().getColumn(0).setPreferredWidth(50);   // #
-        table.getColumnModel().getColumn(1).setPreferredWidth(90);   // Time
-        table.getColumnModel().getColumn(2).setPreferredWidth(100);  // Direction
-        table.getColumnModel().getColumn(3).setPreferredWidth(75);   // Tool
-        table.getColumnModel().getColumn(4).setPreferredWidth(140);  // Host
-        table.getColumnModel().getColumn(5).setPreferredWidth(120);  // Path
-        table.getColumnModel().getColumn(6).setPreferredWidth(60);   // Type
-        table.getColumnModel().getColumn(7).setPreferredWidth(65);   // Length
-        table.getColumnModel().getColumn(8).setPreferredWidth(350);  // Preview
-        table.getColumnModel().getColumn(9).setPreferredWidth(100);  // Comment
+        table.getColumnModel().getColumn(1).setPreferredWidth(85);   // Time
+        table.getColumnModel().getColumn(2).setPreferredWidth(95);   // Direction
+        table.getColumnModel().getColumn(3).setPreferredWidth(70);   // Tool
+        table.getColumnModel().getColumn(4).setPreferredWidth(130);  // Host
+        table.getColumnModel().getColumn(5).setPreferredWidth(110);  // Path
+        table.getColumnModel().getColumn(6).setPreferredWidth(55);   // Type
+        table.getColumnModel().getColumn(7).setPreferredWidth(60);   // Length
+        table.getColumnModel().getColumn(8).setPreferredWidth(100);  // Security / Tag
+        table.getColumnModel().getColumn(9).setPreferredWidth(320);  // Preview
+        table.getColumnModel().getColumn(10).setPreferredWidth(90);  // Comment
 
         tableScrollPane = new JScrollPane(table);
 
@@ -319,6 +323,22 @@ public class WebSocketLoggerTab extends JPanel {
         // Native HTTP Handshake editor
         httpRequestEditor = api.userInterface().createHttpRequestEditor(EditorOptions.READ_ONLY);
         bottomTabbedPane.addTab("Handshake Upgrade Request", httpRequestEditor.uiComponent());
+
+        // JSON Beautifier Tab
+        beautifiedArea = new JTextArea();
+        beautifiedArea.setEditable(false);
+        beautifiedArea.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
+        beautifiedArea.setBorder(new EmptyBorder(8, 8, 8, 8));
+        JScrollPane beautifiedScrollPane = new JScrollPane(beautifiedArea);
+        bottomTabbedPane.addTab("✨ Beautified JSON", beautifiedScrollPane);
+
+        // Decoded / JWT Inspector Tab
+        decodedArea = new JTextArea();
+        decodedArea.setEditable(false);
+        decodedArea.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
+        decodedArea.setBorder(new EmptyBorder(8, 8, 8, 8));
+        JScrollPane decodedScrollPane = new JScrollPane(decodedArea);
+        bottomTabbedPane.addTab("🔍 Decoded / JWT", decodedScrollPane);
 
         // Metadata panel
         detailsArea = new JTextArea();
@@ -493,13 +513,26 @@ public class WebSocketLoggerTab extends JPanel {
         sb.append("Target Host:       ").append(entry.getHost()).append(":").append(entry.getPort()).append("\n");
         sb.append("Path:              ").append(entry.getPath()).append("\n");
         sb.append("WebSocket URL:     ").append(entry.getUrl()).append("\n");
+        sb.append("Security Tags:     ").append(entry.getSecurityTags().isEmpty() ? "None" : entry.getSecurityTags()).append("\n");
         sb.append("Comment:           ").append(entry.getComment()).append("\n");
         detailsArea.setText(sb.toString());
         detailsArea.setCaretPosition(0);
+
+        // Populate Beautified JSON
+        String beautified = com.burp.websocketlogger.analysis.PayloadBeautifier.beautify(entry.getPayloadText());
+        beautifiedArea.setText(beautified);
+        beautifiedArea.setCaretPosition(0);
+
+        // Populate Decoded / JWT Inspector
+        String decoded = com.burp.websocketlogger.analysis.PayloadBeautifier.decodeInspect(entry.getPayloadText());
+        decodedArea.setText(decoded);
+        decodedArea.setCaretPosition(0);
     }
 
     private void clearEditors() {
         detailsArea.setText("");
+        beautifiedArea.setText("");
+        decodedArea.setText("");
     }
 
     private void updateCounters() {
@@ -602,7 +635,33 @@ public class WebSocketLoggerTab extends JPanel {
                 }
             }
         });
-        popupMenu.add(commentItem);
+        popupMenu.addSeparator();
+
+        // Send to Repeater
+        JMenuItem sendToRepeaterItem = new JMenuItem("Send to Repeater");
+        sendToRepeaterItem.addActionListener(e -> {
+            int row = table.getSelectedRow();
+            if (row != -1) {
+                WebSocketLogEntry entry = tableModel.getEntryAt(table.convertRowIndexToModel(row));
+                if (entry != null) {
+                    sendEntryToRepeater(entry);
+                }
+            }
+        });
+        popupMenu.add(sendToRepeaterItem);
+
+        // Send to Intruder
+        JMenuItem sendToIntruderItem = new JMenuItem("Send to Intruder");
+        sendToIntruderItem.addActionListener(e -> {
+            int row = table.getSelectedRow();
+            if (row != -1) {
+                WebSocketLogEntry entry = tableModel.getEntryAt(table.convertRowIndexToModel(row));
+                if (entry != null) {
+                    sendEntryToIntruder(entry);
+                }
+            }
+        });
+        popupMenu.add(sendToIntruderItem);
 
         popupMenu.addSeparator();
 
@@ -681,6 +740,66 @@ public class WebSocketLoggerTab extends JPanel {
             } catch (Exception ex) {
                 JOptionPane.showMessageDialog(this, "Error exporting file: " + ex.getMessage(), "Export Error", JOptionPane.ERROR_MESSAGE);
             }
+        }
+    }
+
+    private void sendEntryToRepeater(WebSocketLogEntry entry) {
+        if (entry == null) return;
+        try {
+            HttpRequest upgradeReq = entry.getUpgradeRequest();
+            if (upgradeReq != null) {
+                String tabName = "WS #" + entry.getId();
+                api.repeater().sendToRepeater(upgradeReq, tabName);
+                // Also copy the WebSocket payload to clipboard for instant pasting
+                copyToClipboard(entry.getPayloadText());
+                JOptionPane.showMessageDialog(
+                        this,
+                        "WebSocket handshake request sent to Repeater (Tab: " + tabName + ").\n" +
+                                "The WebSocket frame payload has also been copied to your clipboard!",
+                        "Sent to Repeater",
+                        JOptionPane.INFORMATION_MESSAGE
+                );
+            } else {
+                copyToClipboard(entry.getPayloadText());
+                JOptionPane.showMessageDialog(
+                        this,
+                        "Handshake request not available for this frame.\n" +
+                                "The frame payload has been copied to your clipboard.",
+                        "Payload Copied",
+                        JOptionPane.INFORMATION_MESSAGE
+                );
+            }
+        } catch (Exception ex) {
+            JOptionPane.showMessageDialog(this, "Could not send to Repeater: " + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    private void sendEntryToIntruder(WebSocketLogEntry entry) {
+        if (entry == null) return;
+        try {
+            HttpRequest upgradeReq = entry.getUpgradeRequest();
+            if (upgradeReq != null) {
+                api.intruder().sendToIntruder(upgradeReq);
+                copyToClipboard(entry.getPayloadText());
+                JOptionPane.showMessageDialog(
+                        this,
+                        "Handshake request sent to Intruder.\n" +
+                                "The frame payload has also been copied to your clipboard!",
+                        "Sent to Intruder",
+                        JOptionPane.INFORMATION_MESSAGE
+                );
+            } else {
+                copyToClipboard(entry.getPayloadText());
+                JOptionPane.showMessageDialog(
+                        this,
+                        "Handshake request not available for this frame.\n" +
+                                "The frame payload has been copied to your clipboard.",
+                        "Payload Copied",
+                        JOptionPane.INFORMATION_MESSAGE
+                );
+            }
+        } catch (Exception ex) {
+            JOptionPane.showMessageDialog(this, "Could not send to Intruder: " + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
         }
     }
 

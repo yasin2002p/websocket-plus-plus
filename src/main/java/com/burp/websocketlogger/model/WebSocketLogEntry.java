@@ -28,6 +28,7 @@ public class WebSocketLogEntry {
 
     private volatile String comment = "";
     private volatile Color highlightColor = null;
+    private final com.burp.websocketlogger.analysis.SecurityScanner.ScanResult scanResult;
 
     public WebSocketLogEntry(
             int id,
@@ -66,6 +67,17 @@ public class WebSocketLogEntry {
         this.payloadText = (text != null) ? text : "";
         this.length = payload != null ? payload.length() : this.payloadText.getBytes(StandardCharsets.UTF_8).length;
         this.upgradeRequest = upgradeRequest;
+
+        // Passive Security Scan
+        this.scanResult = com.burp.websocketlogger.analysis.SecurityScanner.scan(this);
+        // Automatic soft highlight for detected errors or tokens if no highlight is set
+        if (this.scanResult.hasError()) {
+            this.highlightColor = new Color(255, 204, 204); // Soft Red for Errors
+        } else if (this.scanResult.hasToken()) {
+            this.highlightColor = new Color(255, 235, 179); // Soft Amber for Tokens / Secrets
+        } else if (this.scanResult.hasPii()) {
+            this.highlightColor = new Color(225, 245, 254); // Soft Blue for PII
+        }
     }
 
     public int getId() {
@@ -166,5 +178,13 @@ public class WebSocketLogEntry {
                 || trimmed.equalsIgnoreCase("{\"action\":\"ping\"}")
                 || trimmed.equalsIgnoreCase("{\"event\":\"ping\"}")
                 || trimmed.isEmpty();
+    }
+
+    public com.burp.websocketlogger.analysis.SecurityScanner.ScanResult getScanResult() {
+        return scanResult;
+    }
+
+    public String getSecurityTags() {
+        return scanResult != null ? scanResult.getTagSummary() : "";
     }
 }

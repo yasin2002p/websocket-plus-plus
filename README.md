@@ -54,12 +54,20 @@ Modern single-page applications (SPAs), trading platforms, real-time chats, and 
 - **Sort-Aware Auto-Scroll**: When sorting descending by `#` (ID) or time (newest on top), auto-scroll locks viewport to the top (row 0). When sorted ascending (newest on bottom), auto-scroll smoothly follows the latest message.
 - **Zero Viewport Drift**: Toggle `Auto Scroll` off to inspect frames without interruption while traffic continues streaming in the background.
 
-### 4. Native Burp Message Editors
-- Integrated **WebSocketMessageEditor** (Raw, Hex, and Inspector tabs).
-- Integrated **HttpRequestEditor** displaying the original HTTP Handshake Upgrade request (headers, cookies, authorization tokens).
-- Structured **Message Details** panel showing metadata, connection IDs, byte lengths, and paths.
+### 4. Advanced Message Inspectors & Decoders
+- **Native Burp Editors**: Full Raw, Hex, and Burp Inspector tabs via Montoya's `WebSocketMessageEditor`.
+- **HTTP Handshake Editor**: Integrated `HttpRequestEditor` for viewing and auditing Upgrade requests (cookies, headers, origin).
+- **✨ Beautified JSON**: Instant clean formatting and indentation for minified JSON and Socket.io frames (`42[...]`).
+- **🔍 Decoded / JWT Inspector**: Automatically unpacks and formats embedded JWT tokens (Header, Payload Claims, Signature) and Base64 structures without needing external tools.
+- **Message Details**: Structured inspection displaying IDs, timestamps, frame lengths, and security tags.
 
-### 5. Quick Toggles & Productivity Tools
+### 5. Pentester Tools & Passive Security Scanner
+- **Passive Information Leakage Scanner**:
+  - Automatically identifies and flags **🔑 Tokens / Secrets** (JWTs, AWS Keys, OpenAI keys, GitHub tokens, access tokens).
+  - Automatically flags **👤 PII** (emails, phone numbers, national IDs).
+  - Automatically flags **⚠ Server Errors** (SQL exceptions, stack traces, unhandled exceptions).
+  - Dynamic soft highlighting with color tags in the table and query support via `tag contains "Token"` or `tag == pii`.
+- **Send to Repeater & Intruder**: Right-click any WebSocket frame to bridge its handshake request directly to Burp Repeater or Burp Intruder, while copying the frame payload to your clipboard for instant tampering and replay.
 - **One-Click Direction Filters**: Instantly toggle `Outgoing (Client)` or `Incoming (Server)` streams.
 - **Smart Heartbeat Filtering & Custom Rules**:
   - Automatically hides common standard heartbeats (`2`, `3`, `ping`, `pong`, `{"type":"ping"}`, etc.).
@@ -67,7 +75,7 @@ Modern single-page applications (SPAs), trading platforms, real-time chats, and 
   - **Heartbeat Rules Manager (`⚙ Rules`)**: Dedicated manager to add, edit, enable/disable, and delete custom heartbeat filtering rules at any time.
 - **In Scope Only**: Automatically filters traffic against Burp's target scope rules.
 - **Exporting**: Export filtered or complete datasets to standard **CSV** and **JSON** files.
-- **Context Actions**: Right-click to copy payload, copy WebSocket URL, copy handshake, send to heartbeat filters, or add colored comments.
+- **Context Actions**: Right-click to Send to Repeater, Send to Intruder, copy payload, copy WebSocket URL, copy handshake, send to heartbeat filters, or add colored comments.
 
 ---
 

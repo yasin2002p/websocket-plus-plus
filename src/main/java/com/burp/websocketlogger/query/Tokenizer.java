@@ -18,7 +18,8 @@ public class Tokenizer {
             "id",
             "conn", "connection",
             "comment",
-            "color", "highlight"
+            "color", "highlight",
+            "tag", "tags", "security"
     );
 
     private final String input;
