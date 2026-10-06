@@ -45,63 +45,8 @@ public class WebSocketLoggerExtension implements BurpExtension {
             api.logging().logToError("Could not start WebSocket history sync: " + t.getMessage());
         }
 
-        // 2. Register live WebSocket handler specifically for the PROXY tool (browsers & intercepted traffic)
-        try {
-            api.proxy().registerWebSocketCreationHandler(creation -> {
-                int connId = connectionIdCounter.incrementAndGet();
-                HttpRequest upgradeReq = creation.upgradeRequest();
-                String host = "";
-                int port = 0;
-                String path = "";
-                String url = "";
-                if (upgradeReq != null) {
-                    try {
-                        if (upgradeReq.httpService() != null) {
-                            host = upgradeReq.httpService().host();
-                            port = upgradeReq.httpService().port();
-                        }
-                    } catch (Throwable ignored) {
-                    }
-                    try {
-                        path = upgradeReq.path();
-                    } catch (Throwable ignored) {
-                    }
-                    try {
-                        url = upgradeReq.url();
-                    } catch (Throwable ignored) {
-                    }
-                }
-
-                final String finalHost = host;
-                final int finalPort = port;
-                final String finalPath = path;
-                final String finalUrl = url;
-
-                creation.proxyWebSocket().registerProxyMessageHandler(new ProxyMessageHandler() {
-                    @Override
-                    public TextMessageReceivedAction handleTextMessageReceived(InterceptedTextMessage msg) {
-                        return safeContinueProxyTextMessage(msg);
-                    }
-
-                    @Override
-                    public TextMessageToBeSentAction handleTextMessageToBeSent(InterceptedTextMessage msg) {
-                        return safeContinueProxyTextMessageToBeSent(msg);
-                    }
-
-                    @Override
-                    public BinaryMessageReceivedAction handleBinaryMessageReceived(InterceptedBinaryMessage msg) {
-                        return safeContinueProxyBinaryMessage(msg);
-                    }
-
-                    @Override
-                    public BinaryMessageToBeSentAction handleBinaryMessageToBeSent(InterceptedBinaryMessage msg) {
-                        return safeContinueProxyBinaryMessageToBeSent(msg);
-                    }
-                });
-            });
-        } catch (Throwable e) {
-            api.logging().logToError("Could not register Proxy WebSocket creation handler: " + e.getMessage());
-        }
+        // 2. Register live WebSocket handler across non-Proxy tools (Repeater, Extensions, Intruder)
+        // Proxy traffic is safely, passively captured via WebSocketHistorySync without intercepting the live wire.
 
         // 3. Register live WebSocket handler across ALL other Burp tools (Repeater, Extensions, Intruder)
         try {
@@ -205,78 +150,6 @@ public class WebSocketLoggerExtension implements BurpExtension {
         }
 
         api.logging().logToOutput("WebSocket++ initialized successfully.");
-    }
-
-    private TextMessageReceivedAction safeContinueProxyTextMessage(InterceptedTextMessage msg) {
-        try {
-            return TextMessageReceivedAction.continueWith(msg);
-        } catch (Throwable t) {
-            return new TextMessageReceivedAction() {
-                @Override
-                public MessageReceivedAction action() {
-                    return MessageReceivedAction.CONTINUE;
-                }
-
-                @Override
-                public String payload() {
-                    return msg.payload();
-                }
-            };
-        }
-    }
-
-    private TextMessageToBeSentAction safeContinueProxyTextMessageToBeSent(InterceptedTextMessage msg) {
-        try {
-            return TextMessageToBeSentAction.continueWith(msg);
-        } catch (Throwable t) {
-            return new TextMessageToBeSentAction() {
-                @Override
-                public MessageToBeSentAction action() {
-                    return MessageToBeSentAction.CONTINUE;
-                }
-
-                @Override
-                public String payload() {
-                    return msg.payload();
-                }
-            };
-        }
-    }
-
-    private BinaryMessageReceivedAction safeContinueProxyBinaryMessage(InterceptedBinaryMessage msg) {
-        try {
-            return BinaryMessageReceivedAction.continueWith(msg);
-        } catch (Throwable t) {
-            return new BinaryMessageReceivedAction() {
-                @Override
-                public MessageReceivedAction action() {
-                    return MessageReceivedAction.CONTINUE;
-                }
-
-                @Override
-                public ByteArray payload() {
-                    return msg.payload();
-                }
-            };
-        }
-    }
-
-    private BinaryMessageToBeSentAction safeContinueProxyBinaryMessageToBeSent(InterceptedBinaryMessage msg) {
-        try {
-            return BinaryMessageToBeSentAction.continueWith(msg);
-        } catch (Throwable t) {
-            return new BinaryMessageToBeSentAction() {
-                @Override
-                public MessageToBeSentAction action() {
-                    return MessageToBeSentAction.CONTINUE;
-                }
-
-                @Override
-                public ByteArray payload() {
-                    return msg.payload();
-                }
-            };
-        }
     }
 
     private TextMessageAction safeContinueTextMessage(TextMessage textMessage) {

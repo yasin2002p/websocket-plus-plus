@@ -503,52 +503,26 @@ public class FullTestSuite {
         check("WebSocket++".equals(registeredExtName.get()), "Extension name registered properly: " + registeredExtName.get());
         check("WebSocket++".equals(registeredTabTitle.get()), "Suite tab registered with title: " + registeredTabTitle.get());
         check(registeredTabComponent.get() instanceof WebSocketLoggerTab, "Registered tab component is WebSocketLoggerTab");
-        check(capturedProxyWsHandler.get() != null, "ProxyWebSocketCreationHandler registered with Proxy service");
         check(capturedWsHandler.get() != null, "WebSocketCreatedHandler registered with WebSockets service");
 
-        // --- TEST 1: Live Proxy WebSocket traffic (Browser to Server) ---
-        burp.api.montoya.proxy.websocket.ProxyWebSocketCreationHandler proxyHandler = capturedProxyWsHandler.get();
-        AtomicReference<burp.api.montoya.proxy.websocket.ProxyMessageHandler> capturedProxyMsgHandler = new AtomicReference<>();
-
-        burp.api.montoya.proxy.websocket.ProxyWebSocketCreation mockProxyCreation = createMock(burp.api.montoya.proxy.websocket.ProxyWebSocketCreation.class, (p, m, a) -> {
-            if (m.getName().equals("upgradeRequest")) {
-                return createMock(HttpRequest.class, (p2, m2, a2) -> {
-                    if (m2.getName().equals("path")) return "/browser/ws";
-                    if (m2.getName().equals("url")) return "wss://target.com/browser/ws";
-                    if (m2.getName().equals("httpService")) {
-                        return createMock(HttpService.class, (p3, m3, a3) -> {
-                            if (m3.getName().equals("host")) return "target.com";
-                            if (m3.getName().equals("port")) return 443;
-                            return null;
-                        });
-                    }
-                    return null;
-                });
-            } else if (m.getName().equals("proxyWebSocket")) {
-                return createMock(burp.api.montoya.proxy.websocket.ProxyWebSocket.class, (p2, m2, a2) -> {
-                    if (m2.getName().equals("registerProxyMessageHandler")) {
-                        capturedProxyMsgHandler.set((burp.api.montoya.proxy.websocket.ProxyMessageHandler) a2[0]);
-                        return createMock(Registration.class, (p3, m3, a3) -> null);
-                    }
-                    return null;
-                });
-            }
+        // --- TEST 1: UTF-8 Encoding Verification for Persian & Unicode traffic ---
+        String persianText = "متن ارسال شده: تست پیام فارسی با کاراکترهای خاص";
+        byte[] persianBytes = persianText.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        ByteArray mockPersianPayload = createMock(ByteArray.class, (p, m, a) -> {
+            if (m.getName().equals("getBytes")) return persianBytes;
+            if (m.getName().equals("length")) return persianBytes.length;
+            if (m.getName().equals("toString")) return persianText;
             return null;
         });
 
-        proxyHandler.handleWebSocketCreation(mockProxyCreation);
-        check(capturedProxyMsgHandler.get() != null, "ProxyMessageHandler registered on ProxyWebSocket");
+        WebSocketLogEntry persianEntry = new WebSocketLogEntry(
+                999, 10, "Proxy", DirectionType.SERVER_TO_CLIENT, "Text",
+                "example.com", 443, "/ws", "wss://example.com/ws",
+                mockPersianPayload, null, null
+        );
 
-        // Simulate incoming text frame through Proxy
-        burp.api.montoya.proxy.websocket.InterceptedTextMessage mockProxyMsg = createMock(burp.api.montoya.proxy.websocket.InterceptedTextMessage.class, (p, m, a) -> {
-            if (m.getName().equals("payload")) return "{\"browser\":\"message\"}";
-            if (m.getName().equals("direction")) return Direction.CLIENT_TO_SERVER;
-            return null;
-        });
-
-        burp.api.montoya.proxy.websocket.TextMessageReceivedAction proxyAction = capturedProxyMsgHandler.get().handleTextMessageReceived(mockProxyMsg);
-        check(proxyAction != null, "Proxy TextMessageReceivedAction returned");
-        check("{\"browser\":\"message\"}".equals(proxyAction.payload()), "Proxy payload preserved: " + proxyAction.payload());
+        check(persianText.equals(persianEntry.getPayloadText()), "Persian UTF-8 text decoded with zero Mojibake corruption: " + persianEntry.getPayloadText());
+        check(persianEntry.getLength() == persianBytes.length, "Persian UTF-8 payload length matches exact byte count");
 
         // --- TEST 2: Live Repeater WebSocket traffic ---
         WebSocketCreatedHandler wsHandler = capturedWsHandler.get();

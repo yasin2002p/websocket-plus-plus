@@ -54,8 +54,17 @@ public class WebSocketLogEntry {
         this.path = path != null ? path : "";
         this.url = url != null ? url : "";
         this.payload = payload;
-        this.payloadText = payloadText != null ? payloadText : (payload != null ? payload.toString() : "");
-        this.length = payload != null ? payload.length() : (payloadText != null ? payloadText.getBytes(StandardCharsets.UTF_8).length : 0);
+        String text = payloadText;
+        if (text == null && payload != null) {
+            try {
+                byte[] b = payload.getBytes();
+                text = (b != null) ? new String(b, StandardCharsets.UTF_8) : payload.toString();
+            } catch (Throwable t) {
+                try { text = payload.toString(); } catch (Throwable ignored) { text = ""; }
+            }
+        }
+        this.payloadText = (text != null) ? text : "";
+        this.length = payload != null ? payload.length() : this.payloadText.getBytes(StandardCharsets.UTF_8).length;
         this.upgradeRequest = upgradeRequest;
     }
 

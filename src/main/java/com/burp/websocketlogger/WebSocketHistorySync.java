@@ -101,15 +101,20 @@ public class WebSocketHistorySync {
 
                     if (payload != null) {
                         try {
-                            payloadText = payload.toString();
-                        } catch (Throwable ignored) {
-                        }
-                        try {
                             byte[] bytes = payload.getBytes();
-                            if (bytes != null && isBinaryData(bytes)) {
-                                type = "Binary";
+                            if (bytes != null) {
+                                payloadText = new String(bytes, java.nio.charset.StandardCharsets.UTF_8);
+                                if (isBinaryData(bytes)) {
+                                    type = "Binary";
+                                }
+                            } else {
+                                payloadText = payload.toString();
                             }
                         } catch (Throwable ignored) {
+                            try {
+                                payloadText = payload.toString();
+                            } catch (Throwable ignored2) {
+                            }
                         }
                     }
 
