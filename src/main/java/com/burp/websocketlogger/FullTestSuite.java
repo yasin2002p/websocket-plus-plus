@@ -721,6 +721,44 @@ public class FullTestSuite {
         check(!testQuery(feDirectionTest, clientEntry, "dir == to_client"), "Query 'dir == to_client' rejects Client -> Server");
         check(testQuery(feDirectionTest, serverEntry, "dir == \"to client\""), "Query 'dir == \"to client\"' matches Server -> Client");
 
+        // --- TEST 7: Query History (Max 10, Deduplication, Most Recent First) ---
+        SwingUtilities.invokeAndWait(() -> {
+            WebSocketLoggerTab tabForHistory = new WebSocketLoggerTab(mockApi);
+            check(tabForHistory.getRecentQueries().isEmpty(), "Initial query history is empty");
+            check(tabForHistory.getHistoryBtn() != null, "History dropdown button is initialized");
+
+            // Apply several queries
+            JTextField qf = tabForHistory.getQueryField();
+            JButton hBtn = tabForHistory.getHistoryBtn();
+
+            qf.setText("payload contains \"token\"");
+            tabForHistory.getTableModel().reapplyFilter();
+            // Trigger through action listener
+            qf.postActionEvent();
+            check(tabForHistory.getRecentQueries().size() == 1, "First query saved in history");
+            check(tabForHistory.getRecentQueries().get(0).equals("payload contains \"token\""), "Query content matches in history");
+
+            // Add duplicate query -> should move to top without duplicating
+            qf.setText("length > 100");
+            qf.postActionEvent();
+            check(tabForHistory.getRecentQueries().size() == 2, "Second query saved in history");
+            check(tabForHistory.getRecentQueries().get(0).equals("length > 100"), "Most recent query is at index 0");
+
+            qf.setText("payload contains \"token\"");
+            qf.postActionEvent();
+            check(tabForHistory.getRecentQueries().size() == 2, "Duplicate query does not increase list size");
+            check(tabForHistory.getRecentQueries().get(0).equals("payload contains \"token\""), "Duplicate moved to most recent position (index 0)");
+
+            // Add 12 different queries to test max limit 10
+            for (int i = 1; i <= 12; i++) {
+                qf.setText("dir == client and length == " + i);
+                qf.postActionEvent();
+            }
+            check(tabForHistory.getRecentQueries().size() == 10, "Query history capped strictly at 10 items");
+            check(tabForHistory.getRecentQueries().get(0).equals("dir == client and length == 12"), "Newest query is at top of history");
+            check(tabForHistory.getRecentQueries().get(9).equals("dir == client and length == 3"), "Oldest retained query is at bottom (index 9)");
+        });
+
         // Verify Help Dialog can construct and display without errors if not headless
         if (!GraphicsEnvironment.isHeadless()) {
             QueryHelpDialog helpDialog = new QueryHelpDialog(null);
