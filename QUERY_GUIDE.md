@@ -1,251 +1,250 @@
-# راهنمای جامع فیلترنویسی و کوئری‌ها (WebSocket Logger++ Query Guide)
+# WebSocket Logger++ Query Syntax & Filtering Guide
 
-اکستنشن **WebSocket Logger++** دارای یک موتور تجزیه و تحلیل کوئری (Query Engine) مستقل و پیشرفته است که امکان فیلتر کردن دقیق ترافیک وب‌سوکت را درست مانند اکستنشن محبوب *Logger++* برای وب‌سوکت فراهم می‌کند.
-
-این سند، مرجع کامل قوانین نحوه نگارش، فیلدها، عملگرها و سناریوهای کاربردی در تست نفوذ و تحلیل وب‌سوکت است.
+This document is the comprehensive reference guide for creating filters and queries in **WebSocket Logger++**.
 
 ---
 
-## فهرست مطالب
-1. [مبانی و نحوه نگارش (Syntax Basics)](#۱-مبانی-و-نحوه-نگارش)
-2. [جدول فیلدهای قابل استفاده (Available Fields)](#۲-جدول-فیلدها)
-3. [عملگرهای مقایسه‌ای (Comparison Operators)](#۳-عملگرهای-مقایسه‌ای)
-4. [عملگرهای منطقی و پرانتزگذاری (Logical Operators)](#۴-عملگرهای-منطقی-و-ترکیبی)
-5. [جهت‌های ترافیک (Direction Aliases)](#۵-جهت‌های-ترافیک)
-6. [سناریوهای پرتکرار و مثال‌های کاربردی (Real-world Scenarios)](#۶-سناریوهای-پرتکرار-و-مثال‌های-کاربردی)
-7. [نکات کلیدی و عیب‌یابی (Tips & Troubleshooting)](#۷-نکات-کلیدی-و-عیب‌یابی)
+## Table of Contents
+1. [Syntax Basics](#1-syntax-basics)
+2. [Fields Reference](#2-fields-reference)
+3. [Comparison Operators](#3-comparison-operators)
+4. [Logical Operators & Precedence](#4-logical-operators--precedence)
+5. [Direction Aliases](#5-direction-aliases)
+6. [Real-World Pentesting & Debugging Recipes](#6-real-world-pentesting--debugging-recipes)
+7. [Tips & Best Practices](#7-tips--best-practices)
 
 ---
 
-## ۱. مبانی و نحوه نگارش
+## 1. Syntax Basics
 
-* **جستجوی آزاد (Free-text Search):**  
-  اگر فقط یک عبارت ساده (بدون نام فیلد و عملگر) وارد کنید، کوئری به طور خودکار در تمام بخش‌های پیام (شامل متن Payload، هاست، مسیر، URL و کامنت‌ها) جستجو می‌کند:
-  ```text
-  admin
-  ```
-  یا برای عبارات چند کلمه‌ای:
-  ```text
-  "unauthorized user"
-  ```
+### Free-Text Search
+If you enter an unquoted single word or a quoted phrase without specifying a field, the engine performs a full-text search across:
+- `payload`
+- `host`
+- `path`
+- `url`
+- `comment`
 
-* **ساختار کوئری فیلدمحور:**  
-  ```text
-  <field> <operator> <value>
-  ```
-  مثال:
-  ```text
-  payload contains "token"
-  ```
+**Examples:**
+```text
+admin
+"unauthorized user"
+token
+```
 
-* **عدم حساسیت به حروف کوچک و بزرگ (Case-Insensitive):**  
-  نام فیلدها، عملگرها و مقادیر متنی نسبت به بزرگی و کوچکی حروف حساس نیستند (`Payload CONTAINS "ADMIN"` دقیقاً معادل `payload contains "admin"` است).
+### Field-Based Expressions
+Structured queries follow the format:
+```text
+<field> <operator> <value>
+```
 
-* **کوتیشن‌ها:**  
-  مقادیر رشته‌ای می‌توانند بین دابل‌کوتیشن `"` یا سینگل‌کوتیشن `'` قرار گیرند. اگر مقدار شامل کاراکترهای فاصله یا علائم نگارشی است، حتماً از کوتیشن استفاده کنید.
+**Examples:**
+```text
+payload contains "Bearer"
+length > 128
+dir == client
+```
+
+### Case Insensitivity
+All field names, operators, and string matching comparisons are case-insensitive:
+```text
+payload contains "admin"
+PAYLOAD CONTAINS "ADMIN"
+```
+*(Both evaluate identically).*
+
+### Quotes & Escaping
+- String values containing spaces, special characters, or JSON formatting must be enclosed in double quotes (`"..."`) or single quotes (`'...'`).
+- Use backslashes to escape inner quotes:
+  ```text
+  payload contains "{\"status\":\"ok\"}"
+  ```
+- Or use single quotes to avoid escaping double quotes:
+  ```text
+  payload contains '{"status":"ok"}'
+  ```
 
 ---
 
-## ۲. جدول فیلدها
+## 2. Fields Reference
 
-| فیلد اصلی | نام‌های مستعار (Aliases) | نوع داده | توضیحات |
+| Field Name | Aliases | Data Type | Description |
 |---|---|---|---|
-| `payload` | `body`, `data`, `p` | متن (String) | محتوای متنی فریم وب‌سوکت |
-| `dir` | `direction`, `d` | جهت (Direction) | جهت ارسال پیام (`client`, `server`, `to_server`, ...) |
-| `host` | `h` | متن (String) | دامنه یا IP سرور مقصد |
-| `path` | - | متن (String) | مسیر درخواست اتصال وب‌سوکت (مانند `/socket.io/` یا `/ws`) |
-| `url` | - | متن (String) | آدرس کامل وب‌سوکت (شامل پروتکل و کوئری استرینگ) |
-| `length` | `len`, `size` | عدد (Integer) | اندازه پیلود بر حسب بایت |
-| `type` | - | متن (String) | نوع فریم (`Text` یا `Binary`) |
-| `tool` | - | متن (String) | ابزار ارسال‌کننده در برپ (`Proxy`, `Repeater`, `Extensions`) |
-| `id` | - | عدد (Integer) | شناسه منحصر‌به‌فرد فریم در لاگر |
-| `port` | - | عدد (Integer) | پورت مقصد سرور (مانند `443` یا `80`) |
-| `conn` | `connection` | عدد (Integer) | شناسه کانکشن وب‌سوکت |
-| `comment`| - | متن (String) | متن یادداشت و کامنت نوشته‌شده برای سطر |
+| `payload` | `body`, `data`, `p` | String | The text payload of the WebSocket frame |
+| `dir` | `direction`, `d` | Direction | Transmission direction (`client`, `server`, etc.) |
+| `host` | `h` | String | Target host or IP address |
+| `path` | - | String | WebSocket endpoint URI path (e.g., `/socket.io/`, `/ws`) |
+| `url` | - | String | Full WebSocket URL |
+| `length` | `len`, `size` | Integer | Frame payload length in bytes |
+| `type` | - | String | Frame payload type (`Text` or `Binary`) |
+| `tool` | - | String | Burp source tool (`Proxy`, `Repeater`, `Extensions`) |
+| `id` | - | Integer | Sequential frame ID in the logger |
+| `port` | - | Integer | Destination TCP port (e.g., `443`, `80`) |
+| `conn` | `connection` | Integer | WebSocket connection ID |
+| `comment` | - | String | User-added comment on the log entry |
 
 ---
 
-## ۳. عملگرهای مقایسه‌ای
+## 3. Comparison Operators
 
-### عملگرهای رشته‌ای (String Operators)
-* `==` یا `=` : برابری دقیق
-  ```text
-  path == "/chat/room1"
-  ```
-* `!=` : نامساوی دقیق
-  ```text
-  type != "Binary"
-  ```
-* `contains` : شامل بودن متن (Substring match)
-  ```text
-  payload contains "Bearer"
-  ```
-* `!contains` : شامل نبودن متن
-  ```text
-  payload !contains "heartbeat"
-  ```
-* `startswith` : شروع شدن با مقدار مورد نظر
-  ```text
-  path startswith "/api/v2"
-  ```
-* `endswith` : خاتمه یافتن با مقدار مورد نظر
-  ```text
-  path endswith ".json"
-  ```
-* `matches` یا `regex` : تطابق بر اساس عبارت باقاعده (Regular Expression)
-  ```text
-  payload matches "user_id=[0-9]+"
-  ```
-* `!matches` یا `!regex` : عدم تطابق با Regex
-  ```text
-  payload !matches "^\{.*\}$"
-  ```
+### String Operators
+| Operator | Description | Example |
+|---|---|---|
+| `==` or `=` | Exact match | `path == "/ws/v1/chat"` |
+| `!=` | Exact mismatch | `type != "Binary"` |
+| `contains` | Substring match | `payload contains "Bearer"` |
+| `!contains` | Substring does not match | `payload !contains "heartbeat"` |
+| `startswith` | Prefix match | `path startswith "/api/v2"` |
+| `endswith` | Suffix match | `path endswith ".json"` |
+| `matches` or `regex` | Regular expression match | `payload matches "user_id=\d+"` |
+| `!matches` or `!regex`| Regular expression mismatch | `payload !matches "^\{.*\}$"` |
 
-### عملگرهای عددی (Numeric Operators)
-برای فیلدهای `length`, `id`, `port`, `conn`:
-* `>`, `<`, `>=`, `<=`, `==`, `!=`
-  ```text
-  len > 512
-  length <= 64
-  port == 8443
-  id >= 100
-  ```
+### Numeric Operators
+Applicable to `length`, `id`, `port`, `conn`:
+- `>` (greater than)
+- `<` (less than)
+- `>=` (greater than or equal)
+- `<=` (less than or equal)
+- `==` or `=` (equal)
+- `!=` (not equal)
+
+**Examples:**
+```text
+len > 512
+length <= 64
+port == 8443
+id >= 100
+```
 
 ---
 
-## ۴. عملگرهای منطقی و ترکیبی
+## 4. Logical Operators & Precedence
 
-* **`AND` یا `&&` :** برقراری همزمان هر دو شرط
-  ```text
-  dir == client and length > 100
-  ```
-* **`OR` یا `||` :** برقراری حداقل یکی از شرط‌ها
-  ```text
-  dir == server or payload contains "error"
-  ```
-* **`NOT` یا `!` :** نقیض کردن شرط (معکوس‌سازی)
-  ```text
-  not (payload contains "ping")
-  ```
-* **پرانتز `( ... )` :** تعیین اولویت و گروه‌بندی شرط‌ها
-  ```text
-  (dir == client and len > 200) or (dir == server and payload contains "unauthorized")
-  ```
+Combine multiple expressions using:
+- **`AND`** or **`&&`**: Both expressions must evaluate to true.
+- **`OR`** or **`||`**: At least one expression must evaluate to true.
+- **`NOT`** or **`!`**: Negates the following expression.
+- **Parentheses `( ... )`**: Enforce grouping and precedence.
+
+**Examples:**
+```text
+dir == client and length > 100
+dir == server or payload contains "error"
+not (payload contains "ping")
+(dir == client and len > 200) or (dir == server and payload contains "unauthorized")
+```
 
 ---
 
-## ۵. جهت‌های ترافیک (Direction Aliases)
+## 5. Direction Aliases
 
-برای فیلتر کردن جهت پیام با فیلد `dir` می‌توانید از تمام نام‌های استاندارد زیر استفاده کنید:
+The `dir` field supports multiple intuitive aliases:
 
-* **ترافیک کلاینت به سرور (Outgoing / To Server):**
-  - `client`
-  - `outgoing`
-  - `out`
-  - `c2s`
-  - `"to server"`
-  - `to_server`
-  - `toserver`
+### Outgoing (Client to Server)
+- `client`
+- `outgoing`
+- `out`
+- `c2s`
+- `"to server"`
+- `to_server`
+- `toserver`
 
-* **ترافیک سرور به کلاینت (Incoming / To Client):**
-  - `server`
-  - `incoming`
-  - `in`
-  - `s2c`
-  - `"to client"`
-  - `to_client`
-  - `toclient`
+### Incoming (Server to Client)
+- `server`
+- `incoming`
+- `in`
+- `s2c`
+- `"to client"`
+- `to_client`
+- `toclient`
 
 ---
 
-## ۶. سناریوهای پرتکرار و مثال‌های کاربردی
+## 6. Real-World Pentesting & Debugging Recipes
 
-### ۱. حذف پینگ‌ها و هارت‌بیت‌های تکراری و نویز ترافیک
-معمولاً کلاینت‌ها برای زنده نگه‌داشتن اتصال، پیلودهای خالی `{}` یا پینگ می‌فرستند و سرور آبجکت‌هایی با تایم متغیر برمی‌گرداند:
+### 1. Filtering Out Repetitive Keepalives & Heartbeats
+Often, clients send empty objects (`{}`) or pings to keep the connection alive, while the server echoes responses with varying timestamps:
 
-* **حذف `{}` از سمت کلاینت و حذف هارت‌بیت‌های سرور:**
+- **Filter Out Client `{}` and Server Heartbeats:**
   ```sql
   not (dir == client and payload == "{}") and not (dir == server and payload contains "arnstep")
   ```
 
-* **حذف با Regex برای آبجکت‌هایی با فیلد time متغیر:**
+- **Filter Using Regex for Dynamic Timestamps:**
   ```sql
   not (dir == client and payload == "{}") and not (payload matches '\{"id":0,"senderId":0.*"arnstep":0\}')
   ```
 
-* **حذف پینگ/پانگ‌های عددی Socket.IO / Engine.io (مانند `2` و `3`):**
+- **Filter Socket.IO / Engine.io Numerical Pings (`2` & `3`):**
   ```sql
   payload != "2" and payload != "3"
   ```
 
 ---
 
-### ۲. جستجو برای داده‌های حساس و توکن‌های احراز هویت
-* **پیدا کردن توکن‌های Bearer یا JWT:**
+### 2. Hunting for Sensitive Credentials & Tokens
+- **Find Bearer Tokens and JWTs:**
   ```sql
   payload contains "Bearer" or payload matches "eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+"
   ```
 
-* **پیدا کردن پسورد یا کلیدهای امنیتی در کلاینت:**
+- **Find Passwords or API Keys Sent by Client:**
   ```sql
   dir == client and (payload contains "password" or payload contains "apikey" or payload contains "secret")
   ```
 
 ---
 
-### ۳. بررسی آسیب‌پذیری‌های وب‌سوکت (Web Pentesting)
-
-* **یافتن پیام‌های خطا و استثناهای سرور (Information Disclosure):**
+### 3. Application Security & Error Inspection
+- **Information Disclosure (Stack Traces & Errors):**
   ```sql
   dir == server and (payload contains "exception" or payload contains "traceback" or payload contains "syntax error")
   ```
 
-* **شناسایی پاسخ‌های خطای احراز هویت یا دسترسی (401 / 403):**
+- **Authentication & Authorization Failures (401 / 403 equivalents):**
   ```sql
   dir == server and (payload contains "unauthorized" or payload contains "forbidden" or payload contains "access denied")
   ```
 
-* **جداسازی فقط پیام‌های ارسال شده از تب Repeater:**
+- **Isolate Repeater Messages Only:**
   ```sql
   tool == "Repeater"
   ```
 
-* **فیلتر کردن پیام‌های حجیم (احتمال وجود نشت داده یا فایل):**
+- **Identify Large Payloads (Potential Exfiltration or File Transfers):**
   ```sql
   len > 2048 and dir == incoming
   ```
 
-* **جستجوی پیام‌های باینری:**
+- **Isolate Binary Frames:**
   ```sql
   type == "Binary"
   ```
 
 ---
 
-### ۴. تفکیک دامنه و مسیر (Multi-target Scope)
-* **تمرکز روی یک هاست خاص به جز بقیه:**
+### 4. Multi-Target Scope Filtering
+- **Focus on Specific Endpoint:**
   ```sql
   host == "chat.target.com" and path startswith "/ws"
   ```
 
-* **مستثنی کردن دامنه‌های فرعی یا CDN:**
+- **Exclude Telemetry or Analytics Domains:**
   ```sql
   host !contains "analytics" and host !contains "telemetry"
   ```
 
 ---
 
-## ۷. نکات کلیدی و عیب‌یابی
+## 7. Tips & Best Practices
 
-1. **چراغ سبز و قرمز نوار کوئری (Live Validation):**
-   - اگر کوئری تایپ‌شده دارای سینتکس صحیح باشد، عبارت `✓ Ready` یا `✓ Valid syntax` با رنگ سبز نمایش داده می‌شود.
-   - اگر پرانتزی نبسته باشید یا عملگری ناقص باشد، بلافاصله ارور دقیق با رنگ قرمز نمایان می‌شود (مثلاً `✗ Missing value after contains`).
+1. **Live Syntax Feedback:**  
+   Watch the status label next to the **Apply** button:
+   - `✓ Ready` or `✓ Valid syntax`: Query is syntactically sound.
+   - `✗ Error message`: Live syntax notification (e.g. unclosed quote or missing parenthesis).
 
-2. **کلیدهای میانبر:**
-   - پس از نوشتن کوئری، فشردن کلید **Enter** بلافاصله کوئری را اعمال می‌کند.
-   - دکمه **Clear** کوئری را خالی کرده و تمام ترافیک را نمایش می‌دهد.
-   - دکمه **Syntax Help (?)** در داخل اکستنشن راهنمای سریع را به صورت پنجره Popup باز می‌کند.
+2. **Quick Filter Integration:**  
+   The UI checkboxes (`Outgoing`, `Incoming`, `Hide Heartbeats`, `In Scope Only`) automatically combine with your active query using `AND` logic.
 
-3. **ترکیب با تیک‌های Quick Filter:**
-   - تیک‌های بالای صفحه مانند **Outgoing (Client)**, **Incoming (Server)**, **Hide Heartbeats**, و **In Scope Only** به صورت خودکار با کوئری شما به صورت `AND` ترکیب می‌شوند.
-   - اگر تیک *Hide Heartbeats* را فعال کنید، هارت‌بیت‌های استاندارد بدون نیاز به نوشتن کوئری پنهان خواهند شد.
+3. **Instant Keyboard Navigation:**  
+   Press **Enter** inside the Query Filter text field to apply your filter immediately without clicking the button.
