@@ -1,13 +1,20 @@
 package com.burp.websocketlogger.query;
 
 import com.burp.websocketlogger.model.DirectionType;
+import com.burp.websocketlogger.model.HeartbeatRule;
 import com.burp.websocketlogger.model.WebSocketLogEntry;
+
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 
 public class FilterEngine {
     private volatile boolean showClientToServer = true;
     private volatile boolean showServerToClient = true;
     private volatile boolean hideHeartbeats = false;
     private volatile boolean inScopeOnly = false;
+
+    private final List<HeartbeatRule> heartbeatRules = Collections.synchronizedList(new ArrayList<>());
 
     private volatile String currentQueryText = "";
     private volatile QueryNode compiledQuery = new QueryNode.AlwaysTrueNode();
@@ -21,6 +28,46 @@ public class FilterEngine {
 
     public FilterEngine(ScopeChecker scopeChecker) {
         this.scopeChecker = scopeChecker;
+    }
+
+    public List<HeartbeatRule> getHeartbeatRules() {
+        synchronized (heartbeatRules) {
+            return new ArrayList<>(heartbeatRules);
+        }
+    }
+
+    public void addHeartbeatRule(HeartbeatRule rule) {
+        if (rule != null) {
+            heartbeatRules.add(rule);
+        }
+    }
+
+    public void removeHeartbeatRule(String ruleId) {
+        if (ruleId == null) return;
+        heartbeatRules.removeIf(r -> ruleId.equals(r.getId()));
+    }
+
+    public void clearHeartbeatRules() {
+        heartbeatRules.clear();
+    }
+
+    public void setHeartbeatRules(List<HeartbeatRule> rules) {
+        heartbeatRules.clear();
+        if (rules != null) {
+            heartbeatRules.addAll(rules);
+        }
+    }
+
+    public boolean isCustomHeartbeat(WebSocketLogEntry entry) {
+        if (entry == null) return false;
+        synchronized (heartbeatRules) {
+            for (HeartbeatRule rule : heartbeatRules) {
+                if (rule.isEnabled() && rule.matches(entry)) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     public synchronized boolean setQuery(String queryText) {
@@ -57,9 +104,11 @@ public class FilterEngine {
             return false;
         }
 
-        // Heartbeat toggle
-        if (hideHeartbeats && entry.isHeartbeat()) {
-            return false;
+        // Heartbeat toggle (built-in default heartbeats OR custom rules)
+        if (hideHeartbeats) {
+            if (entry.isHeartbeat() || isCustomHeartbeat(entry)) {
+                return false;
+            }
         }
 
         // Scope toggle
