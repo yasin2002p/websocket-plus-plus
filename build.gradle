@@ -1,0 +1,29 @@
+plugins {
+    id 'java'
+}
+
+group = 'com.burp'
+version = '1.0.0'
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(17)
+    }
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    compileOnly 'net.portswigger.burp.extensions:montoya-api:2025.3'
+}
+
+jar {
+    manifest {
+        attributes(
+            'Extension-Name': 'WebSocket Logger++',
+            'Extension-Version': project.version
+        )
+    }
+}
