@@ -6,7 +6,7 @@ import com.burp.websocketlogger.query.FilterEngine;
 
 public class TestQueryEngine {
     public static void main(String[] args) {
-        System.out.println("Running WebSocket Logger++ Query Engine Tests...");
+        System.out.println("Running WebSocket++ Query Engine Tests...");
 
         FilterEngine engine = new FilterEngine(url -> url.contains("example.com"));
 
