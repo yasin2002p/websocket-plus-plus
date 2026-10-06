@@ -19,6 +19,7 @@ import burp.api.montoya.ui.editor.WebSocketMessageEditor;
 import burp.api.montoya.websocket.*;
 import com.burp.websocketlogger.export.LogExporter;
 import com.burp.websocketlogger.model.DirectionType;
+import com.burp.websocketlogger.model.HeartbeatRule;
 import com.burp.websocketlogger.model.WebSocketLogEntry;
 import com.burp.websocketlogger.query.*;
 import com.burp.websocketlogger.ui.QueryHelpDialog;
@@ -758,6 +759,79 @@ public class FullTestSuite {
             check(tabForHistory.getRecentQueries().get(0).equals("dir == client and length == 12"), "Newest query is at top of history");
             check(tabForHistory.getRecentQueries().get(9).equals("dir == client and length == 3"), "Oldest retained query is at bottom (index 9)");
         });
+
+        // --- TEST 8: Heartbeat Analyzer & Custom Heartbeat Rules ---
+        // Test 8.1: Analyzer with empty / {}
+        WebSocketLogEntry emptyJsonEntry = new WebSocketLogEntry(
+                200, 1, "Proxy", DirectionType.CLIENT_TO_SERVER, "Text",
+                "target.com", 443, "/ws", "wss://target.com/ws",
+                createMockByteArray("{}"), "{}", null
+        );
+        String qEmpty = HeartbeatAnalyzer.generateQuery(emptyJsonEntry);
+        check(qEmpty.contains("payload == \"{}\""), "Analyzer generates exact {} query for empty JSON object");
+        check(qEmpty.contains("dir == client"), "Analyzer captures client direction for outgoing empty JSON");
+
+        // Test 8.2: Analyzer with complex user payload (time variable)
+        String userNoiseJson = "{\"id\":0,\"senderId\":0,\"type\":0,\"time\":1791314970659,\"retryCount\":0,\"arnstep\":0}";
+        WebSocketLogEntry noiseEntry1 = new WebSocketLogEntry(
+                201, 1, "Proxy", DirectionType.SERVER_TO_CLIENT, "Text",
+                "target.com", 443, "/ws", "wss://target.com/ws",
+                createMockByteArray(userNoiseJson), userNoiseJson, null
+        );
+        String qNoise = HeartbeatAnalyzer.generateQuery(noiseEntry1);
+        check(qNoise.contains("dir == server"), "Analyzer captures server direction for noise payload");
+        check(qNoise.contains("payload contains"), "Analyzer produces ultra-fast non-backtracking contains query for JSON");
+        check(qNoise.contains("\"id\":0") || qNoise.contains("\\\"id\\\":0"), "Analyzer includes static id:0 signature");
+        check(qNoise.contains("\"time\":") || qNoise.contains("\\\"time\\\":"), "Analyzer includes dynamic time signature");
+
+        // Test 8.3: Custom HeartbeatRule compilation and matching
+        HeartbeatRule ruleNoise = new HeartbeatRule("rule-1", "User Heartbeat Noise", qNoise, true);
+        check(ruleNoise.isValid(), "Generated rule compiled successfully without syntax error");
+        check(ruleNoise.matches(noiseEntry1), "Rule matches the original noise packet");
+
+        // Noise packet with a different timestamp and retryCount
+        String userNoiseJson2 = "{\"id\":0,\"senderId\":0,\"type\":0,\"time\":1791399999999,\"retryCount\":5,\"arnstep\":0}";
+        WebSocketLogEntry noiseEntry2 = new WebSocketLogEntry(
+                202, 1, "Proxy", DirectionType.SERVER_TO_CLIENT, "Text",
+                "target.com", 443, "/ws", "wss://target.com/ws",
+                createMockByteArray(userNoiseJson2), userNoiseJson2, null
+        );
+        check(ruleNoise.matches(noiseEntry2), "Rule matches another noise packet with different timestamp!");
+
+        // Normal packet that should NOT match the noise rule
+        String legitimateJson = "{\"id\":105,\"action\":\"chat_message\",\"text\":\"Hello world\"}";
+        WebSocketLogEntry legitEntry = new WebSocketLogEntry(
+                203, 1, "Proxy", DirectionType.SERVER_TO_CLIENT, "Text",
+                "target.com", 443, "/ws", "wss://target.com/ws",
+                createMockByteArray(legitimateJson), legitimateJson, null
+        );
+        check(!ruleNoise.matches(legitEntry), "Rule does NOT match legitimate business message");
+
+        // Test 8.4: FilterEngine with Custom HeartbeatRule
+        FilterEngine feHeartbeat = new FilterEngine(null);
+        feHeartbeat.addHeartbeatRule(ruleNoise);
+
+        // When hideHeartbeats is false -> everything shows
+        feHeartbeat.setHideHeartbeats(false);
+        check(feHeartbeat.matches(noiseEntry1), "When hideHeartbeats=false, noiseEntry1 is shown");
+        check(feHeartbeat.matches(noiseEntry2), "When hideHeartbeats=false, noiseEntry2 is shown");
+        check(feHeartbeat.matches(legitEntry), "When hideHeartbeats=false, legitEntry is shown");
+
+        // When hideHeartbeats is true -> noise packets are hidden, legitimate packet is shown
+        feHeartbeat.setHideHeartbeats(true);
+        check(!feHeartbeat.matches(noiseEntry1), "When hideHeartbeats=true, noiseEntry1 is HIDDEN by custom rule");
+        check(!feHeartbeat.matches(noiseEntry2), "When hideHeartbeats=true, noiseEntry2 is HIDDEN by custom rule");
+        check(feHeartbeat.matches(legitEntry), "When hideHeartbeats=true, legitimate packet remains VISIBLE");
+
+        // When rule is disabled in the dialog -> noise packets become visible again
+        ruleNoise.setEnabled(false);
+        check(feHeartbeat.matches(noiseEntry1), "When rule is disabled, noiseEntry1 is visible again");
+        ruleNoise.setEnabled(true);
+
+        // Test 8.5: Editing rule query dynamically
+        ruleNoise.setQuery("payload contains \"chat_message\"");
+        check(ruleNoise.matches(legitEntry), "After editing rule, it matches the updated query");
+        check(!ruleNoise.matches(noiseEntry1), "After editing rule, it no longer matches old noise");
 
         // Verify Help Dialog can construct and display without errors if not headless
         if (!GraphicsEnvironment.isHeadless()) {

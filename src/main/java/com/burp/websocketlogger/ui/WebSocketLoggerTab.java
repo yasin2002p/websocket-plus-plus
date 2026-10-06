@@ -193,6 +193,12 @@ public class WebSocketLoggerTab extends JPanel {
             updateCounters();
         });
 
+        JButton heartbeatSettingsBtn = new JButton("⚙ Rules");
+        heartbeatSettingsBtn.setToolTipText("Configure and edit custom Heartbeat / Ping-Pong filter rules");
+        heartbeatSettingsBtn.setMargin(new Insets(1, 5, 1, 5));
+        heartbeatSettingsBtn.setFont(heartbeatSettingsBtn.getFont().deriveFont(11f));
+        heartbeatSettingsBtn.addActionListener(e -> openHeartbeatRulesDialog());
+
         inScopeOnlyCheckBox.addActionListener(e -> {
             filterEngine.setInScopeOnly(inScopeOnlyCheckBox.isSelected());
             tableModel.reapplyFilter();
@@ -202,6 +208,7 @@ public class WebSocketLoggerTab extends JPanel {
         leftToggles.add(clientCheckBox);
         leftToggles.add(serverCheckBox);
         leftToggles.add(hideHeartbeatCheckBox);
+        leftToggles.add(heartbeatSettingsBtn);
         leftToggles.add(inScopeOnlyCheckBox);
         filterRow.add(leftToggles, BorderLayout.WEST);
 
@@ -599,6 +606,21 @@ public class WebSocketLoggerTab extends JPanel {
 
         popupMenu.addSeparator();
 
+        // Send to Heartbeat Filters item
+        JMenuItem sendToHeartbeatItem = new JMenuItem("Send to Heartbeat Filters (Hide)");
+        sendToHeartbeatItem.addActionListener(e -> {
+            int row = table.getSelectedRow();
+            if (row != -1) {
+                WebSocketLogEntry entry = tableModel.getEntryAt(table.convertRowIndexToModel(row));
+                if (entry != null) {
+                    sendToHeartbeatFilters(entry);
+                }
+            }
+        });
+        popupMenu.add(sendToHeartbeatItem);
+
+        popupMenu.addSeparator();
+
         // Delete item
         JMenuItem deleteItem = new JMenuItem("Delete Selected Rows");
         deleteItem.addActionListener(e -> {
@@ -665,6 +687,53 @@ public class WebSocketLoggerTab extends JPanel {
     private void copyToClipboard(String text) {
         if (text == null) text = "";
         Toolkit.getDefaultToolkit().getSystemClipboard().setContents(new StringSelection(text), null);
+    }
+
+    private void openHeartbeatRulesDialog() {
+        Window win = SwingUtilities.getWindowAncestor(this);
+        HeartbeatRulesDialog dialog = new HeartbeatRulesDialog(win, filterEngine, () -> {
+            tableModel.reapplyFilter();
+            updateCounters();
+        });
+        dialog.setVisible(true);
+    }
+
+    private void sendToHeartbeatFilters(WebSocketLogEntry entry) {
+        if (entry == null) return;
+
+        String generatedQuery = com.burp.websocketlogger.query.HeartbeatAnalyzer.generateQuery(entry);
+        String defaultName = "Rule " + (filterEngine.getHeartbeatRules().size() + 1) + " (" + entry.getDirection().getDisplayName() + ")";
+        com.burp.websocketlogger.model.HeartbeatRule proposedRule = new com.burp.websocketlogger.model.HeartbeatRule(
+                java.util.UUID.randomUUID().toString(),
+                defaultName,
+                generatedQuery,
+                true
+        );
+
+        Window win = SwingUtilities.getWindowAncestor(this);
+        HeartbeatRuleEditDialog editDialog = new HeartbeatRuleEditDialog(win, proposedRule, true);
+        editDialog.setVisible(true);
+
+        if (editDialog.isSaved()) {
+            filterEngine.addHeartbeatRule(editDialog.getRule());
+
+            // If Hide Heartbeats is not checked, automatically turn it on
+            if (!hideHeartbeatCheckBox.isSelected()) {
+                hideHeartbeatCheckBox.setSelected(true);
+                filterEngine.setHideHeartbeats(true);
+            }
+
+            tableModel.reapplyFilter();
+            updateCounters();
+
+            JOptionPane.showMessageDialog(
+                    this,
+                    "Added rule \"" + editDialog.getRule().getName() + "\" to Heartbeat filters.\n" +
+                            "Matching messages are now hidden (Hide Heartbeats is enabled).",
+                    "Heartbeat Filter Added",
+                    JOptionPane.INFORMATION_MESSAGE
+            );
+        }
     }
 
     public boolean isLoggingPaused() {

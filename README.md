@@ -61,10 +61,13 @@ Modern single-page applications (SPAs), trading platforms, real-time chats, and 
 
 ### 5. Quick Toggles & Productivity Tools
 - **One-Click Direction Filters**: Instantly toggle `Outgoing (Client)` or `Incoming (Server)` streams.
-- **Hide Heartbeats**: Automatically hides common heartbeats (`2`, `3`, `ping`, `pong`, `{"type":"ping"}`, etc.).
+- **Smart Heartbeat Filtering & Custom Rules**:
+  - Automatically hides common standard heartbeats (`2`, `3`, `ping`, `pong`, `{"type":"ping"}`, etc.).
+  - **Send to Heartbeat Filters (Hide)**: Right-click any noisy frame in the log table to automatically analyze its structure and generate an ultra-fast query rule (with intelligent detection of dynamic timestamps, counters, and noise).
+  - **Heartbeat Rules Manager (`⚙ Rules`)**: Dedicated manager to add, edit, enable/disable, and delete custom heartbeat filtering rules at any time.
 - **In Scope Only**: Automatically filters traffic against Burp's target scope rules.
 - **Exporting**: Export filtered or complete datasets to standard **CSV** and **JSON** files.
-- **Context Actions**: Right-click to copy payload, copy WebSocket URL, copy handshake, or add colored comments.
+- **Context Actions**: Right-click to copy payload, copy WebSocket URL, copy handshake, send to heartbeat filters, or add colored comments.
 
 ---
 
