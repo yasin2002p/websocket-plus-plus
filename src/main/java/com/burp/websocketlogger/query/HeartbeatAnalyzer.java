@@ -13,10 +13,16 @@ public class HeartbeatAnalyzer {
     private static final Pattern PAIR_PATTERN = Pattern.compile("\"([^\"]+)\"\\s*:\\s*(\"[^\"]*\"|\\d+|true|false|null)");
 
     /**
-     * Generates a recommended WebSocket++ query filter for a given WebSocket log entry.
-     * Prioritizes ultra-fast substring checks (e.g. contains / ==) over heavy backtracking regexes.
+     * Generates a recommended WebSocket++ query filter for a given WebSocket log entry based on payload content.
      */
     public static String generateQuery(WebSocketLogEntry entry) {
+        return generatePayloadQuery(entry);
+    }
+
+    /**
+     * Generates a filter query based on payload content (substring / contains / exact).
+     */
+    public static String generatePayloadQuery(WebSocketLogEntry entry) {
         if (entry == null) return "payload == \"\"";
 
         String dirStr = (entry.getDirection() == DirectionType.CLIENT_TO_SERVER) ? "client" : "server";
@@ -56,6 +62,16 @@ public class HeartbeatAnalyzer {
         } else {
             return "dir == " + dirStr + " and payload contains \"" + escapeStringLiteral(payload.substring(0, 60)) + "\"";
         }
+    }
+
+    /**
+     * Generates a filter query based strictly on the payload byte length.
+     * Example: dir == server and length == 78
+     */
+    public static String generateLengthQuery(WebSocketLogEntry entry) {
+        if (entry == null) return "length == 0";
+        String dirStr = (entry.getDirection() == DirectionType.CLIENT_TO_SERVER) ? "client" : "server";
+        return "dir == " + dirStr + " and length == " + entry.getLength();
     }
 
     /**

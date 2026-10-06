@@ -22,6 +22,7 @@ import com.burp.websocketlogger.model.DirectionType;
 import com.burp.websocketlogger.model.HeartbeatRule;
 import com.burp.websocketlogger.model.WebSocketLogEntry;
 import com.burp.websocketlogger.query.*;
+import com.burp.websocketlogger.ui.HeartbeatRuleEditDialog;
 import com.burp.websocketlogger.ui.QueryHelpDialog;
 import com.burp.websocketlogger.ui.WebSocketLoggerTab;
 import com.burp.websocketlogger.ui.WebSocketTableModel;
@@ -832,6 +833,32 @@ public class FullTestSuite {
         ruleNoise.setQuery("payload contains \"chat_message\"");
         check(ruleNoise.matches(legitEntry), "After editing rule, it matches the updated query");
         check(!ruleNoise.matches(noiseEntry1), "After editing rule, it no longer matches old noise");
+
+        // Test 8.6: Length-based filter generation and dialog option switching
+        String lengthQuery = HeartbeatAnalyzer.generateLengthQuery(noiseEntry1);
+        check(lengthQuery.equals("dir == server and length == " + noiseEntry1.getLength()), "Length query generated accurately: " + lengthQuery);
+        HeartbeatRule lengthRule = new HeartbeatRule("rule-len", "Length Rule", lengthQuery, true);
+        check(lengthRule.isValid(), "Length rule is valid syntax");
+        check(lengthRule.matches(noiseEntry1), "Length rule matches noiseEntry1 with same length");
+
+        // Verify Dialog with payload vs length options in GUI thread
+        SwingUtilities.invokeAndWait(() -> {
+            HeartbeatRuleEditDialog dualDialog = new HeartbeatRuleEditDialog(
+                    null, lengthRule, true, qNoise, lengthQuery
+            );
+            check(dualDialog.getByPayloadRadio() != null, "Dialog has by-payload radio option");
+            check(dualDialog.getByLengthRadio() != null, "Dialog has by-length radio option");
+
+            // Click by-length radio
+            dualDialog.getByLengthRadio().doClick();
+            check(dualDialog.getQueryArea().getText().equals(lengthQuery), "Switching to length radio updates query area to length query");
+
+            // Click by-payload radio
+            dualDialog.getByPayloadRadio().doClick();
+            check(dualDialog.getQueryArea().getText().equals(qNoise), "Switching to payload radio updates query area to payload query");
+
+            dualDialog.dispose();
+        });
 
         // Verify Help Dialog can construct and display without errors if not headless
         if (!GraphicsEnvironment.isHeadless()) {
