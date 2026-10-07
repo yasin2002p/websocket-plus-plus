@@ -23,6 +23,7 @@ import com.burp.websocketlogger.model.HeartbeatRule;
 import com.burp.websocketlogger.model.WebSocketLogEntry;
 import com.burp.websocketlogger.query.*;
 import com.burp.websocketlogger.ui.HeartbeatRuleEditDialog;
+import java.awt.event.KeyEvent;
 import com.burp.websocketlogger.ui.QueryHelpDialog;
 import com.burp.websocketlogger.ui.WebSocketLoggerTab;
 import com.burp.websocketlogger.ui.WebSocketTableModel;
@@ -483,6 +484,10 @@ public class FullTestSuite {
                 });
             } else if (mName.equals("logging")) {
                 return createMock(Logging.class, (p, m, a) -> null);
+            } else if (mName.equals("repeater")) {
+                return createMock(burp.api.montoya.repeater.Repeater.class, (p, m, a) -> null);
+            } else if (mName.equals("intruder")) {
+                return createMock(burp.api.montoya.intruder.Intruder.class, (p, m, a) -> null);
             } else if (mName.equals("scope")) {
                 return createMock(Scope.class, (p, m, a) -> {
                     if (m.getName().equals("isInScope")) return true;
@@ -937,6 +942,25 @@ public class FullTestSuite {
             QueryHelpDialog helpDialog = new QueryHelpDialog(null);
             check(helpDialog.getTitle().contains("Query Syntax Guide"), "QueryHelpDialog title matches");
             helpDialog.dispose();
+
+            // --- TEST 14: Keyboard Shortcuts & RepeaterBridge Verification ---
+            int mask = Toolkit.getDefaultToolkit().getMenuShortcutKeyMaskEx();
+            Object rBinding = scrollTab.getTable().getInputMap(JComponent.WHEN_ANCESTOR_OF_FOCUSED_COMPONENT)
+                    .get(KeyStroke.getKeyStroke(KeyEvent.VK_R, mask));
+            check("sendToRepeater".equals(rBinding), "Ctrl+R / Cmd+R bound to sendToRepeater action on table");
+
+            Object iBinding = scrollTab.getTable().getInputMap(JComponent.WHEN_ANCESTOR_OF_FOCUSED_COMPONENT)
+                    .get(KeyStroke.getKeyStroke(KeyEvent.VK_I, mask));
+            check("sendToIntruder".equals(iBinding), "Ctrl+I / Cmd+I bound to sendToIntruder action on table");
+
+            boolean bridgeHandled = false;
+            try {
+                com.burp.websocketlogger.ui.RepeaterBridge.sendToRepeater(mockApi, repeaterTestEntry);
+                bridgeHandled = true;
+            } catch (Exception ex) {
+                bridgeHandled = false;
+            }
+            check(bridgeHandled, "RepeaterBridge successfully handled WebSocketLogEntry sending");
         } else {
             System.out.println("[SKIP] GUI dialog tests skipped in headless mode");
         }

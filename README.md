@@ -67,15 +67,18 @@ Modern single-page applications (SPAs), trading platforms, real-time chats, and 
   - Automatically flags **👤 PII** (emails, phone numbers, national IDs).
   - Automatically flags **⚠ Server Errors** (SQL exceptions, stack traces, unhandled exceptions).
   - Dynamic soft highlighting with color tags in the table and query support via `tag contains "Token"` or `tag == pii`.
-- **Send to Repeater, Intruder, Decoder & Comparer**: Right-click any WebSocket frame to bridge its handshake request directly to Burp Repeater or Burp Intruder (with frame payload copied to clipboard), or send the raw frame directly into Burp Decoder and Burp Comparer for binary/text analysis and diffing.
+- **Send to Repeater (`Ctrl + R`) & Intruder (`Ctrl + I`)**:
+  - **Native WebSocket Repeater Bridge**: Directly creates a native WebSocket Repeater tab containing the selected WebSocket message, connection, and directional routing, ready for instant manipulation and replay (with the payload also placed on the clipboard).
+  - **Burp Intruder Bridge**: Send the connection handshake and parameters to Intruder with one key press (`Ctrl + I`).
+- **Send to Decoder & Comparer**: Right-click to send raw frame bytes directly into Burp Decoder or Comparer for decoding and diffing.
 - **One-Click Direction Filters**: Instantly toggle `Outgoing (Client)` or `Incoming (Server)` streams.
 - **Smart Heartbeat Filtering & Custom Rules**:
   - Automatically hides common standard heartbeats (`2`, `3`, `ping`, `pong`, `{"type":"ping"}`, etc.).
   - **Send to Heartbeat Filters (Hide)**: Right-click any noisy frame in the log table to automatically analyze its structure and choose between filtering by **Message Content (Payload)** or by **Frame Length (Bytes)** with live query switching and intelligent detection of dynamic timestamps, counters, and noise.
   - **Heartbeat Rules Manager (`⚙ Rules`)**: Dedicated manager to add, edit, enable/disable, and delete custom heartbeat filtering rules at any time.
 - **In Scope Only**: Automatically filters traffic against Burp's target scope rules.
-- **Exporting**: Export filtered or complete datasets to standard **CSV** and **JSON** files.
-- **Context Actions**: Right-click to Send to Repeater, Send to Intruder, Send to Decoder, Send to Comparer, copy payload, copy WebSocket URL, copy handshake, send to heartbeat filters, or add colored comments.
+- **Exporting**: Resilient native export dialog (`Export...`) for saving filtered or complete datasets to standard **CSV** and **JSON** files with Scope selection and Explorer file opening.
+- **Context Actions & Hotkeys**: Right-click or use shortcuts (`Ctrl+R`, `Ctrl+I`) to Send to Repeater, Send to Intruder, Send to Decoder, Send to Comparer, copy payload, copy WebSocket URL, copy handshake, send to heartbeat filters, or add colored comments.
 
 ---
 
