@@ -17,6 +17,8 @@ import javax.swing.event.DocumentListener;
 import javax.swing.table.TableRowSorter;
 import java.awt.*;
 import java.awt.datatransfer.StringSelection;
+import java.awt.event.ActionEvent;
+import java.awt.event.KeyEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.io.File;
@@ -312,6 +314,7 @@ public class WebSocketLoggerTab extends JPanel {
 
         // Context menu on Table
         setupContextMenu();
+        setupKeyboardShortcuts();
 
         // Bottom Pane: Burp Editors & Details
         JTabbedPane bottomTabbedPane = new JTabbedPane();
@@ -637,30 +640,16 @@ public class WebSocketLoggerTab extends JPanel {
         });
         popupMenu.addSeparator();
 
-        // Send to Repeater
+        // Send to Repeater (Ctrl+R)
         JMenuItem sendToRepeaterItem = new JMenuItem("Send to Repeater");
-        sendToRepeaterItem.addActionListener(e -> {
-            int row = table.getSelectedRow();
-            if (row != -1) {
-                WebSocketLogEntry entry = tableModel.getEntryAt(table.convertRowIndexToModel(row));
-                if (entry != null) {
-                    sendEntryToRepeater(entry);
-                }
-            }
-        });
+        sendToRepeaterItem.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_R, Toolkit.getDefaultToolkit().getMenuShortcutKeyMaskEx()));
+        sendToRepeaterItem.addActionListener(e -> sendSelectedToRepeater());
         popupMenu.add(sendToRepeaterItem);
 
-        // Send to Intruder
+        // Send to Intruder (Ctrl+I)
         JMenuItem sendToIntruderItem = new JMenuItem("Send to Intruder");
-        sendToIntruderItem.addActionListener(e -> {
-            int row = table.getSelectedRow();
-            if (row != -1) {
-                WebSocketLogEntry entry = tableModel.getEntryAt(table.convertRowIndexToModel(row));
-                if (entry != null) {
-                    sendEntryToIntruder(entry);
-                }
-            }
-        });
+        sendToIntruderItem.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_I, Toolkit.getDefaultToolkit().getMenuShortcutKeyMaskEx()));
+        sendToIntruderItem.addActionListener(e -> sendSelectedToIntruder());
         popupMenu.add(sendToIntruderItem);
 
         // Send to Decoder
@@ -779,29 +768,77 @@ public class WebSocketLoggerTab extends JPanel {
         }
     }
 
+    private void setupKeyboardShortcuts() {
+        int menuMask = Toolkit.getDefaultToolkit().getMenuShortcutKeyMaskEx();
+        KeyStroke ctrlR = KeyStroke.getKeyStroke(KeyEvent.VK_R, menuMask);
+        KeyStroke ctrlI = KeyStroke.getKeyStroke(KeyEvent.VK_I, menuMask);
+
+        // Bind on Table
+        table.getInputMap(JComponent.WHEN_ANCESTOR_OF_FOCUSED_COMPONENT).put(ctrlR, "sendToRepeater");
+        table.getActionMap().put("sendToRepeater", new AbstractAction() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                sendSelectedToRepeater();
+            }
+        });
+
+        table.getInputMap(JComponent.WHEN_ANCESTOR_OF_FOCUSED_COMPONENT).put(ctrlI, "sendToIntruder");
+        table.getActionMap().put("sendToIntruder", new AbstractAction() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                sendSelectedToIntruder();
+            }
+        });
+
+        // Also bind globally on this panel (WHEN_IN_FOCUSED_WINDOW)
+        this.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).put(ctrlR, "sendToRepeaterGlobal");
+        this.getActionMap().put("sendToRepeaterGlobal", new AbstractAction() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                sendSelectedToRepeater();
+            }
+        });
+
+        this.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).put(ctrlI, "sendToIntruderGlobal");
+        this.getActionMap().put("sendToIntruderGlobal", new AbstractAction() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                sendSelectedToIntruder();
+            }
+        });
+    }
+
+    public void sendSelectedToRepeater() {
+        int row = table.getSelectedRow();
+        if (row != -1) {
+            WebSocketLogEntry entry = tableModel.getEntryAt(table.convertRowIndexToModel(row));
+            if (entry != null) {
+                sendEntryToRepeater(entry);
+            }
+        }
+    }
+
+    public void sendSelectedToIntruder() {
+        int row = table.getSelectedRow();
+        if (row != -1) {
+            WebSocketLogEntry entry = tableModel.getEntryAt(table.convertRowIndexToModel(row));
+            if (entry != null) {
+                sendEntryToIntruder(entry);
+            }
+        }
+    }
+
     private void sendEntryToRepeater(WebSocketLogEntry entry) {
         if (entry == null) return;
         try {
-            HttpRequest upgradeReq = entry.getUpgradeRequest();
-            if (upgradeReq != null) {
-                String tabName = "WS #" + entry.getId();
-                api.repeater().sendToRepeater(upgradeReq, tabName);
-                // Also copy the WebSocket payload to clipboard for instant pasting
-                copyToClipboard(entry.getPayloadText());
+            copyToClipboard(entry.getPayloadText());
+            boolean nativeTab = RepeaterBridge.sendToRepeater(api, entry);
+            if (!nativeTab) {
                 JOptionPane.showMessageDialog(
                         this,
-                        "WebSocket handshake request sent to Repeater (Tab: " + tabName + ").\n" +
-                                "The WebSocket frame payload has also been copied to your clipboard!",
+                        "WebSocket request sent to Repeater (Tab: WS #" + entry.getId() + ").\n" +
+                                "The frame payload has also been copied to your clipboard!",
                         "Sent to Repeater",
-                        JOptionPane.INFORMATION_MESSAGE
-                );
-            } else {
-                copyToClipboard(entry.getPayloadText());
-                JOptionPane.showMessageDialog(
-                        this,
-                        "Handshake request not available for this frame.\n" +
-                                "The frame payload has been copied to your clipboard.",
-                        "Payload Copied",
                         JOptionPane.INFORMATION_MESSAGE
                 );
             }
@@ -813,10 +850,10 @@ public class WebSocketLoggerTab extends JPanel {
     private void sendEntryToIntruder(WebSocketLogEntry entry) {
         if (entry == null) return;
         try {
+            copyToClipboard(entry.getPayloadText());
             HttpRequest upgradeReq = entry.getUpgradeRequest();
             if (upgradeReq != null) {
                 api.intruder().sendToIntruder(upgradeReq);
-                copyToClipboard(entry.getPayloadText());
                 JOptionPane.showMessageDialog(
                         this,
                         "Handshake request sent to Intruder.\n" +
@@ -825,12 +862,18 @@ public class WebSocketLoggerTab extends JPanel {
                         JOptionPane.INFORMATION_MESSAGE
                 );
             } else {
-                copyToClipboard(entry.getPayloadText());
+                String host = entry.getHost() != null ? entry.getHost() : "localhost";
+                int port = entry.getPort() > 0 ? entry.getPort() : 80;
+                boolean secure = entry.getUrl() != null && entry.getUrl().toLowerCase().startsWith("wss://");
+                String path = entry.getPath() != null ? entry.getPath() : "/";
+                String raw = "GET " + path + " HTTP/1.1\r\nHost: " + host + "\r\n\r\n" + entry.getPayloadText();
+                HttpRequest req = HttpRequest.httpRequest(burp.api.montoya.http.HttpService.httpService(host, port, secure), raw);
+                api.intruder().sendToIntruder(req);
                 JOptionPane.showMessageDialog(
                         this,
-                        "Handshake request not available for this frame.\n" +
-                                "The frame payload has been copied to your clipboard.",
-                        "Payload Copied",
+                        "WebSocket request sent to Intruder.\n" +
+                                "The frame payload has also been copied to your clipboard!",
+                        "Sent to Intruder",
                         JOptionPane.INFORMATION_MESSAGE
                 );
             }
