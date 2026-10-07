@@ -947,11 +947,30 @@ public class FullTestSuite {
             int mask = Toolkit.getDefaultToolkit().getMenuShortcutKeyMaskEx();
             Object rBinding = scrollTab.getTable().getInputMap(JComponent.WHEN_ANCESTOR_OF_FOCUSED_COMPONENT)
                     .get(KeyStroke.getKeyStroke(KeyEvent.VK_R, mask));
-            check("sendToRepeater".equals(rBinding), "Ctrl+R / Cmd+R bound to sendToRepeater action on table");
+            check("sendToRepeater".equals(rBinding), "Ctrl+R / Cmd+R bound to sendToRepeater action on table (ANCESTOR)");
+
+            Object rFocusedBinding = scrollTab.getTable().getInputMap(JComponent.WHEN_FOCUSED)
+                    .get(KeyStroke.getKeyStroke(KeyEvent.VK_R, mask));
+            check("sendToRepeater".equals(rFocusedBinding), "Ctrl+R / Cmd+R bound to sendToRepeater action on table (FOCUSED)");
 
             Object iBinding = scrollTab.getTable().getInputMap(JComponent.WHEN_ANCESTOR_OF_FOCUSED_COMPONENT)
                     .get(KeyStroke.getKeyStroke(KeyEvent.VK_I, mask));
-            check("sendToIntruder".equals(iBinding), "Ctrl+I / Cmd+I bound to sendToIntruder action on table");
+            check("sendToIntruder".equals(iBinding), "Ctrl+I / Cmd+I bound to sendToIntruder action on table (ANCESTOR)");
+
+            Object iFocusedBinding = scrollTab.getTable().getInputMap(JComponent.WHEN_FOCUSED)
+                    .get(KeyStroke.getKeyStroke(KeyEvent.VK_I, mask));
+            check("sendToIntruder".equals(iFocusedBinding), "Ctrl+I / Cmd+I bound to sendToIntruder action on table (FOCUSED)");
+
+            // Auto-select row 0 when no row is selected
+            SwingUtilities.invokeAndWait(() -> {
+                scrollTab.getTable().clearSelection();
+                scrollTab.sendSelectedToRepeater();
+                check(scrollTab.getTable().getSelectedRow() == 0, "sendSelectedToRepeater auto-selects row 0 when no row is selected");
+            });
+
+            check(repeaterTestEntry.isSecure(), "repeaterTestEntry with wss:// isSecure() returns true");
+            repeaterTestEntry.setRawMessage("mockRaw");
+            check("mockRaw".equals(repeaterTestEntry.getRawMessage()), "LogEntry stores and returns rawMessage reference");
 
             boolean bridgeHandled = false;
             try {

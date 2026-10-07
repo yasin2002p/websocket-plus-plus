@@ -160,6 +160,7 @@ public class WebSocketHistorySync {
                             payloadText,
                             req
                     );
+                    entry.setRawMessage(msg);
 
                     batch.add(entry);
                     added++;
