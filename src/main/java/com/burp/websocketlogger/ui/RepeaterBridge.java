@@ -7,12 +7,16 @@ import com.burp.websocketlogger.model.DirectionType;
 import com.burp.websocketlogger.model.WebSocketLogEntry;
 
 import javax.swing.SwingUtilities;
+import java.io.File;
+import java.io.FileWriter;
 import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
+import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.nio.charset.StandardCharsets;
+import java.text.SimpleDateFormat;
 import java.util.*;
 
 /**
@@ -22,6 +26,41 @@ import java.util.*;
 public class RepeaterBridge {
 
     private static volatile ClassLoader burpClassLoader = null;
+    private static final File DEBUG_LOG_FILE = new File("C:\\Users\\stockland\\Desktop\\Web-socket logger\\repeater_bridge_debug.log");
+
+    public static synchronized void debugLog(String message) {
+        debugLog(message, null);
+    }
+
+    public static synchronized void debugLog(String message, Throwable t) {
+        try {
+            String timestamp = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS").format(new Date());
+            String logLine = "[" + timestamp + "] " + message + "\n";
+            try (FileWriter fw = new FileWriter(DEBUG_LOG_FILE, true)) {
+                fw.write(logLine);
+                if (t != null) {
+                    StringWriter sw = new StringWriter();
+                    t.printStackTrace(new PrintWriter(sw));
+                    fw.write(sw.toString() + "\n");
+                }
+            }
+        } catch (Throwable ignored) {}
+    }
+
+    public static Throwable getRootCause(Throwable t) {
+        if (t == null) return null;
+        Throwable curr = t;
+        while (curr.getCause() != null && curr.getCause() != curr) {
+            curr = curr.getCause();
+        }
+        if (curr instanceof InvocationTargetException) {
+            Throwable target = ((InvocationTargetException) curr).getTargetException();
+            if (target != null && target != curr) {
+                return getRootCause(target);
+            }
+        }
+        return curr;
+    }
 
     /**
      * Resolves Burp's internal ClassLoader (AppClassLoader) where internal burp.* classes reside,
@@ -175,9 +214,12 @@ public class RepeaterBridge {
             throw new IllegalArgumentException("MontoyaApi and WebSocketLogEntry cannot be null");
         }
 
+        debugLog("=== sendToRepeater invoked for entry #" + entry.getId() + " (ConnId: " + entry.getConnectionId() + ", Host: " + entry.getHost() + ":" + entry.getPort() + ") ===");
+
         try {
             boolean success = sendNativeWebSocketToRepeater(api, entry);
             if (success) {
+                debugLog("Successfully sent entry #" + entry.getId() + " to Repeater tab.");
                 if (api.logging() != null) {
                     api.logging().logToOutput("[WebSocket++] Frame #" + entry.getId() + " sent to native WebSocket Repeater tab successfully.");
                 }
@@ -186,22 +228,34 @@ public class RepeaterBridge {
                 throw new IllegalStateException("Native WebSocket Repeater dispatch returned false.");
             }
         } catch (Throwable t) {
-            String errorMsg = "Failed to send WebSocket message to Repeater: " + (t.getMessage() != null ? t.getMessage() : t.getClass().getSimpleName());
+            Throwable root = getRootCause(t);
+            String rootMsg = root.getMessage();
+            if (rootMsg == null || rootMsg.trim().isEmpty()) {
+                rootMsg = root.getClass().getSimpleName();
+            }
+            if (root.getClass().getName().contains("Zzg3")) {
+                rootMsg = "Burp Suite internal connection state sync error (Zzg3). Please reconnect in Repeater.";
+            }
+
+            String errorMsg = "Failed to send WebSocket message to Repeater: " + rootMsg;
+            debugLog(errorMsg, t);
             if (api.logging() != null) {
                 StringWriter sw = new StringWriter();
                 t.printStackTrace(new PrintWriter(sw));
                 api.logging().logToError("[WebSocket++] " + errorMsg + "\n" + sw.toString());
             }
-            throw new RuntimeException(errorMsg, t);
+            throw new RuntimeException(errorMsg, root);
         }
     }
 
     private static boolean sendNativeWebSocketToRepeater(MontoyaApi api, WebSocketLogEntry entry) throws Exception {
         // 1. Locate Burp's Repeater Controller (burp.Zgcs)
         Object zgcs = findRepeaterController(api);
+        debugLog("findRepeaterController returned: " + (zgcs != null ? zgcs.getClass().getName() : "null"));
         if (zgcs == null) {
             // Graceful compatibility for unit test suites and mocked MontoyaApi environments
             if (isTestMock(api)) {
+                debugLog("isTestMock returned true, bypassing native reflection dispatch for test.");
                 return true;
             }
             throw new IllegalStateException("Burp Suite Repeater controller (burp.Zgcs) could not be located via reflection.");
@@ -212,6 +266,10 @@ public class RepeaterBridge {
 
         // 3. Locate connection pool manager (burp.Zk6w)
         Object zk6w = findZk6w(zgcs);
+        debugLog("findZk6w returned: " + (zk6w != null ? zk6w.getClass().getName() : "null"));
+        if (zk6w != null) {
+            ensureZk6wListener(api, zk6w);
+        }
 
         // 4. Load required internal classes using resolved Burp ClassLoader
         Class<?> zgcsClass = null;
@@ -236,26 +294,12 @@ public class RepeaterBridge {
             payloadBytes = text.getBytes(StandardCharsets.UTF_8);
         }
 
-        Object zq3hPayload = null;
-        try {
-            Class<?> zz2qClass = loadBurpClass(api, "burp.Zz2q");
-            Method zkMethod = findMethod(zz2qClass, "Zk", byte[].class);
-            if (zkMethod != null) {
-                zkMethod.setAccessible(true);
-                zq3hPayload = zkMethod.invoke(null, (Object) payloadBytes);
-            }
-        } catch (Throwable t) {
-            Class<?> zjieClass = loadBurpClass(api, "burp.Zjie");
-            Method zbConverter = findMethod(zjieClass, "Zb", ByteArray.class);
-            if (zbConverter != null) {
-                zbConverter.setAccessible(true);
-                ByteArray payload = entry.getPayload();
-                if (payload == null) {
-                    payload = ByteArray.byteArray(entry.getPayloadText() != null ? entry.getPayloadText() : "");
-                }
-                zq3hPayload = zbConverter.invoke(null, payload);
-            }
-        }
+        // Obtain Repeater's managed database (burp.Zyt0 / burp.Zmi) from zgcs
+        Object zyt0 = getRepeaterZyt0(zgcs);
+        debugLog("getRepeaterZyt0 returned: " + (zyt0 != null ? zyt0.getClass().getName() : "null"));
+
+        Object zq3hPayload = createManagedZq3h(zyt0, api, payloadBytes);
+        debugLog("zq3hPayload created: " + (zq3hPayload != null ? zq3hPayload.getClass().getName() : "null"));
 
         // Direction enum (burp.Zub1)
         String dirName = entry.getDirection() == DirectionType.CLIENT_TO_SERVER ? "CLIENT_TO_SERVER" : "SERVER_TO_CLIENT";
@@ -271,10 +315,13 @@ public class RepeaterBridge {
             rawMsg = tryFindProxyMessage(api, entry);
             if (rawMsg != null) {
                 entry.setRawMessage(rawMsg);
+                debugLog("Located matching ProxyWebSocketMessage from history for entry #" + entry.getId());
             }
         }
 
         Object unwrappedRaw = unwrap(rawMsg);
+        debugLog("unwrappedRaw is: " + (unwrappedRaw != null ? unwrappedRaw.getClass().getName() : "null"));
+
         if (unwrappedRaw != null && unwrappedRaw.getClass().getName().equals("burp.Zou")) {
             try {
                 Field zpField = unwrappedRaw.getClass().getDeclaredField("ZP");
@@ -288,6 +335,11 @@ public class RepeaterBridge {
                     Object zfc = zyField.get(zg_o);
                     Object zrta = zcField.get(zg_o);
                     if (zfc != null && zrta != null) {
+                        debugLog("Strategy 1: Extracted zfc (" + zfc.getClass().getName() + ") and zrta (" + zrta.getClass().getName() + ")");
+
+                        // Check zrta's internal Zk6w connection list
+                        ensureZrtaConnectionValid(api, zrta, zfc, entry);
+
                         Class<?> zzfcClass = loadBurpClass(api, "burp.Zzfc");
                         Method zkMethod = findMethod(zrta.getClass(), "ZK", zzfcClass);
                         if (zkMethod != null) {
@@ -305,9 +357,22 @@ public class RepeaterBridge {
                                     zdjCtor.setAccessible(true);
                                     rawZdj = zdjCtor.newInstance();
                                 }
+                                Object strat1Payload = zq3hPayload;
+                                if (strat1Payload == null) {
+                                    Method zoQMethod = findMethod(zfc.getClass(), "ZoQ");
+                                    if (zoQMethod != null) {
+                                        strat1Payload = zoQMethod.invoke(zfc);
+                                    }
+                                    if (strat1Payload == null) {
+                                        Method zozMethod = findMethod(zfc.getClass(), "Zoz");
+                                        if (zozMethod != null) {
+                                            strat1Payload = zozMethod.invoke(zfc);
+                                        }
+                                    }
+                                }
                                 Method zjMethod = findMethod(zfni.getClass(), "ZJ", byte.class, zdjClass, zub1Class, zq3hClass);
                                 zjMethod.setAccessible(true);
-                                Object zcfObj = zjMethod.invoke(zfni, rawOpcode != 0 ? rawOpcode : opcode, rawZdj, dirEnum, zq3hPayload);
+                                Object zcfObj = zjMethod.invoke(zfni, rawOpcode != 0 ? rawOpcode : opcode, rawZdj, dirEnum, strat1Payload);
 
                                 Method zbMethod = findMethod(zgcsClass != null ? zgcsClass : zgcs.getClass(), "ZB", zcfClass);
                                 if (zbMethod == null) {
@@ -315,7 +380,9 @@ public class RepeaterBridge {
                                 }
                                 if (zbMethod != null) {
                                     zbMethod.setAccessible(true);
-                                    zbMethod.invoke(zgcs, zcfObj);
+                                    debugLog("Strategy 1: Invoking ZB on zgcs with zcfObj...");
+                                    invokeZbOnEdt(zbMethod, zgcs, zcfObj);
+                                    debugLog("Strategy 1: Dispatch succeeded!");
                                     return true;
                                 }
                             }
@@ -323,6 +390,7 @@ public class RepeaterBridge {
                     }
                 }
             } catch (Throwable t) {
+                debugLog("Strategy 1 dispatch failed: " + t.getMessage(), t);
                 if (api.logging() != null) {
                     api.logging().logToOutput("[WebSocket++] Strategy 1 (Zou message) dispatch failed: " + t.getMessage() + ". Attempting Strategy 2...");
                 }
@@ -330,9 +398,15 @@ public class RepeaterBridge {
         }
 
         // Strategy 2: Pool verification & dynamic registration via burp.Zk6w
+        debugLog("Attempting Strategy 2 (Direct Zk6w pool registration and dispatch)...");
         int targetWsId = ensureConnectionInZk6w(api, zk6w, entry);
+        debugLog("Strategy 2: ensureConnectionInZk6w returned targetWsId: " + targetWsId);
         if (targetWsId <= 0) {
-            targetWsId = entry.getConnectionId() > 0 ? entry.getConnectionId() : 1;
+            targetWsId = registerConnectionInZk6w(api, zk6w, entry);
+            debugLog("Strategy 2: registerConnectionInZk6w returned targetWsId: " + targetWsId);
+        }
+        if (targetWsId <= 0) {
+            targetWsId = 1;
         }
 
         Constructor<?> zdjCtor = zdjClass.getConstructor();
@@ -351,8 +425,162 @@ public class RepeaterBridge {
             throw new NoSuchMethodException("Method ZB not found on " + zgcs.getClass().getName());
         }
         zbMethod.setAccessible(true);
-        zbMethod.invoke(zgcs, zcf);
+        debugLog("Strategy 2: Invoking ZB on zgcs with zcf (targetWsId: " + targetWsId + ")...");
+        invokeZbOnEdt(zbMethod, zgcs, zcf);
+        debugLog("Strategy 2: Dispatch succeeded!");
         return true;
+    }
+
+    private static void invokeZbOnEdt(Method zbMethod, Object zgcs, Object zcf) throws Exception {
+        if (SwingUtilities.isEventDispatchThread()) {
+            zbMethod.invoke(zgcs, zcf);
+        } else {
+            final Throwable[] err = new Throwable[1];
+            try {
+                SwingUtilities.invokeAndWait(() -> {
+                    try {
+                        zbMethod.invoke(zgcs, zcf);
+                    } catch (Throwable t) {
+                        err[0] = t;
+                    }
+                });
+            } catch (Throwable t) {
+                if (err[0] != null) throw (Exception) (err[0] instanceof Exception ? err[0] : new RuntimeException(err[0]));
+                throw new RuntimeException("EDT invocation interrupted or failed: " + t.getMessage(), t);
+            }
+            if (err[0] != null) {
+                if (err[0] instanceof InvocationTargetException) {
+                    Throwable cause = ((InvocationTargetException) err[0]).getTargetException();
+                    if (cause instanceof Exception) throw (Exception) cause;
+                    throw new RuntimeException(cause != null ? cause : err[0]);
+                }
+                if (err[0] instanceof Exception) throw (Exception) err[0];
+                throw new RuntimeException(err[0]);
+            }
+        }
+    }
+
+    public static Object getRepeaterZyt0(Object zgcs) {
+        if (zgcs == null) return null;
+        try {
+            Field zfField = null;
+            for (Field f : zgcs.getClass().getDeclaredFields()) {
+                if (f.getName().equals("ZF") || f.getType().getName().equals("burp.Zgga")) {
+                    zfField = f;
+                    break;
+                }
+            }
+            if (zfField != null) {
+                zfField.setAccessible(true);
+                Object zgga = zfField.get(zgcs);
+                if (zgga != null) {
+                    Class<?> curr = zgga.getClass();
+                    while (curr != null && curr != Object.class) {
+                        try {
+                            Field zo = curr.getDeclaredField("Zo");
+                            zo.setAccessible(true);
+                            Object val = zo.get(zgga);
+                            if (val != null) return val;
+                        } catch (NoSuchFieldException ignored) {}
+                        curr = curr.getSuperclass();
+                    }
+                }
+            }
+        } catch (Throwable t) {
+            debugLog("getRepeaterZyt0 exception: " + t.getMessage());
+        }
+        return null;
+    }
+
+    public static Object createManagedZq3h(Object zyt0, MontoyaApi api, byte[] payloadBytes) {
+        if (zyt0 != null && payloadBytes != null) {
+            try {
+                Method zfMethod = findMethod(zyt0.getClass(), "ZF", byte[].class);
+                if (zfMethod != null) {
+                    zfMethod.setAccessible(true);
+                    return zfMethod.invoke(zyt0, (Object) payloadBytes);
+                }
+            } catch (Throwable t) {
+                debugLog("createManagedZq3h ZF failed: " + t.getMessage(), t);
+            }
+        }
+        // Fallback: unmanaged Zz2q
+        try {
+            Class<?> zz2qClass = loadBurpClass(api, "burp.Zz2q");
+            Method zkMethod = findMethod(zz2qClass, "Zk", byte[].class);
+            if (zkMethod != null) {
+                zkMethod.setAccessible(true);
+                return zkMethod.invoke(null, (Object) payloadBytes);
+            }
+        } catch (Throwable ignored) {}
+        return null;
+    }
+
+    private static void ensureZk6wListener(MontoyaApi api, Object zk6w) {
+        if (zk6w == null) return;
+        try {
+            Field zrField = null;
+            for (Field f : zk6w.getClass().getDeclaredFields()) {
+                if (f.getName().equals("Zr") || f.getType().getName().equals("burp.Zks_")) {
+                    zrField = f;
+                    break;
+                }
+            }
+            if (zrField != null) {
+                zrField.setAccessible(true);
+                Object val = zrField.get(zk6w);
+                if (val == null) {
+                    Class<?> zksClass = loadBurpClass(api, "burp.Zks_");
+                    Field zcField = zksClass.getDeclaredField("Zc");
+                    zcField.setAccessible(true);
+                    Object noOpListener = zcField.get(null);
+                    if (noOpListener != null) {
+                        zrField.set(zk6w, noOpListener);
+                        debugLog("Initialized null Zr listener in Zk6w with built-in burp.Zks_.Zc singleton.");
+                    }
+                }
+            }
+        } catch (Throwable t) {
+            debugLog("ensureZk6wListener warning: " + t.getMessage());
+        }
+    }
+
+    private static void ensureZrtaConnectionValid(MontoyaApi api, Object zrta, Object zfc, WebSocketLogEntry entry) {
+        if (zrta == null || zfc == null) return;
+        try {
+            Field zaField = null;
+            for (Field f : zrta.getClass().getDeclaredFields()) {
+                if (f.getName().equals("Za") || f.getType().getName().equals("burp.Zk6w")) {
+                    zaField = f;
+                    break;
+                }
+            }
+            if (zaField != null) {
+                zaField.setAccessible(true);
+                Object zk6w = zaField.get(zrta);
+                if (zk6w != null) {
+                    ensureZk6wListener(api, zk6w);
+                    Field zvField = zk6w.getClass().getDeclaredField("ZV");
+                    zvField.setAccessible(true);
+                    List<?> connList = (List<?>) zvField.get(zk6w);
+
+                    Method zoxMethod = findMethod(zfc.getClass(), "Zox");
+                    int currWsId = zoxMethod != null ? ((Number) zoxMethod.invoke(zfc)).intValue() : 0;
+                    debugLog("ensureZrtaConnectionValid: currWsId = " + currWsId + ", connList.size = " + (connList != null ? connList.size() : 0));
+
+                    if (currWsId <= 0 || connList == null || currWsId > connList.size()) {
+                        Method zkcMethod = findMethod(zfc.getClass(), "Zkc", int.class);
+                        if (zkcMethod != null) {
+                            zkcMethod.setAccessible(true);
+                            zkcMethod.invoke(zfc, 0);
+                            debugLog("Reset zfc connection ID to 0 so zrta.ZK() will dynamically register and populate Zk6w.");
+                        }
+                    }
+                }
+            }
+        } catch (Throwable t) {
+            debugLog("ensureZrtaConnectionValid warning: " + t.getMessage());
+        }
     }
 
     private static boolean isTestMock(MontoyaApi api) {
@@ -380,11 +608,49 @@ public class RepeaterBridge {
             if (history == null || history.isEmpty()) return null;
 
             int targetId = entry.getConnectionId();
+            String targetPayload = entry.getPayloadText();
+            DirectionType targetDir = entry.getDirection();
+
+            // Match 1: exact ID + direction + payload
             for (int i = history.size() - 1; i >= 0; i--) {
                 ProxyWebSocketMessage msg = history.get(i);
                 if (msg != null && msg.webSocketId() == targetId) {
-                    if (msg.direction() != null && DirectionType.fromBurpDirection(msg.direction()) == entry.getDirection()) {
+                    if (msg.direction() != null && DirectionType.fromBurpDirection(msg.direction()) == targetDir) {
+                        String p = msg.payload() != null ? msg.payload().toString() : "";
+                        if (p.equals(targetPayload)) {
+                            return msg;
+                        }
+                    }
+                }
+            }
+
+            // Match 2: exact ID + direction
+            for (int i = history.size() - 1; i >= 0; i--) {
+                ProxyWebSocketMessage msg = history.get(i);
+                if (msg != null && msg.webSocketId() == targetId) {
+                    if (msg.direction() != null && DirectionType.fromBurpDirection(msg.direction()) == targetDir) {
                         return msg;
+                    }
+                }
+            }
+
+            // Match 3: exact ID
+            for (int i = history.size() - 1; i >= 0; i--) {
+                ProxyWebSocketMessage msg = history.get(i);
+                if (msg != null && msg.webSocketId() == targetId) {
+                    return msg;
+                }
+            }
+
+            // Match 4: payload match
+            if (targetPayload != null && !targetPayload.isEmpty()) {
+                for (int i = history.size() - 1; i >= 0; i--) {
+                    ProxyWebSocketMessage msg = history.get(i);
+                    if (msg != null) {
+                        String p = msg.payload() != null ? msg.payload().toString() : "";
+                        if (p.equals(targetPayload)) {
+                            return msg;
+                        }
                     }
                 }
             }
@@ -422,6 +688,7 @@ public class RepeaterBridge {
                     Method zq0Method = findMethod(zgga.getClass(), "ZQ0");
                     if (zq0Method != null) {
                         zq0Method.setAccessible(true);
+                        debugLog("Repeater UI is not yet opened in Burp Suite, initializing via zgga.ZQ0()...");
                         if (SwingUtilities.isEventDispatchThread()) {
                             zq0Method.invoke(zgga);
                         } else {
@@ -471,9 +738,18 @@ public class RepeaterBridge {
     private static int ensureConnectionInZk6w(MontoyaApi api, Object zk6w, WebSocketLogEntry entry) {
         if (zk6w == null) return -1;
         try {
-            Field zvField = zk6w.getClass().getDeclaredField("ZV");
+            ensureZk6wListener(api, zk6w);
+            Field zvField = null;
+            for (Field f : zk6w.getClass().getDeclaredFields()) {
+                if (f.getName().equals("ZV") || List.class.isAssignableFrom(f.getType())) {
+                    zvField = f;
+                    break;
+                }
+            }
+            if (zvField == null) return -1;
             zvField.setAccessible(true);
             List<?> connList = (List<?>) zvField.get(zk6w);
+            debugLog("ensureConnectionInZk6w: current connList size: " + (connList != null ? connList.size() : "null"));
 
             int desiredId = entry.getConnectionId();
             if (connList != null && !connList.isEmpty()) {
@@ -490,10 +766,21 @@ public class RepeaterBridge {
                         return i + 1; // 1-based index
                     }
                 }
+
+                if (desiredId >= 1 && desiredId <= connList.size()) {
+                    return desiredId;
+                }
             }
 
-            return registerConnectionInZk6w(api, zk6w, entry);
+            int registered = registerConnectionInZk6w(api, zk6w, entry);
+            if (registered > 0) return registered;
+
+            if (connList != null && !connList.isEmpty()) {
+                return 1;
+            }
+            return -1;
         } catch (Throwable t) {
+            debugLog("ensureConnectionInZk6w exception: " + t.getMessage(), t);
             return -1;
         }
     }
@@ -528,7 +815,10 @@ public class RepeaterBridge {
     }
 
     private static int registerConnectionInZk6w(MontoyaApi api, Object zk6w, WebSocketLogEntry entry) {
+        if (zk6w == null) return -1;
         try {
+            ensureZk6wListener(api, zk6w);
+
             String host = entry.getHost() != null && !entry.getHost().isEmpty() ? entry.getHost() : "localhost";
             int port = entry.getPort() > 0 ? entry.getPort() : (entry.isSecure() ? 443 : 80);
             boolean secure = entry.isSecure();
@@ -555,32 +845,68 @@ public class RepeaterBridge {
             Method zvMethod = findMethod(zk6w.getClass(), "ZV", zkkeClass);
             if (zvMethod != null) {
                 zvMethod.setAccessible(true);
-                return (Integer) zvMethod.invoke(zk6w, zzab);
+                Integer newId = (Integer) zvMethod.invoke(zk6w, zzab);
+                debugLog("registerConnectionInZk6w: ZV returned newId: " + newId);
+                if (newId != null && newId > 0) {
+                    return newId;
+                }
+            }
+
+            // Read connList size after attempt
+            Field zvField = null;
+            for (Field f : zk6w.getClass().getDeclaredFields()) {
+                if (f.getName().equals("ZV") || List.class.isAssignableFrom(f.getType())) {
+                    zvField = f;
+                    break;
+                }
+            }
+            if (zvField != null) {
+                zvField.setAccessible(true);
+                List<?> connList = (List<?>) zvField.get(zk6w);
+                if (connList != null && !connList.isEmpty()) {
+                    return connList.size();
+                }
             }
             return -1;
         } catch (Throwable t) {
+            debugLog("registerConnectionInZk6w exception: " + t.getMessage(), t);
             return -1;
         }
     }
 
     public static Object unwrap(Object obj) {
         if (obj == null) return null;
+
+        // 1. Check burp.Proxyable via reflection
+        try {
+            Method m = obj.getClass().getMethod("proxiedObject");
+            m.setAccessible(true);
+            Object target = m.invoke(obj);
+            if (target != null && target != obj) {
+                return unwrap(target);
+            }
+        } catch (Throwable ignored) {}
+
+        // 2. Check Java dynamic proxy
         if (java.lang.reflect.Proxy.isProxyClass(obj.getClass())) {
             try {
                 java.lang.reflect.InvocationHandler h = java.lang.reflect.Proxy.getInvocationHandler(obj);
                 if (h != null) {
-                    try {
-                        Field zeField = h.getClass().getDeclaredField("Ze");
-                        zeField.setAccessible(true);
-                        Object target = zeField.get(h);
-                        if (target != null) {
-                            return unwrap(target);
-                        }
-                    } catch (NoSuchFieldException ignored) {}
+                    for (Field f : h.getClass().getDeclaredFields()) {
+                        f.setAccessible(true);
+                        try {
+                            Object target = f.get(h);
+                            if (target != null && target != obj && target.getClass().getName().startsWith("burp.")) {
+                                return unwrap(target);
+                            }
+                        } catch (Throwable ignored) {}
+                    }
                 }
             } catch (Throwable ignored) {}
             return obj;
         }
+
+        // 3. Check burp.Zxuh wrapper
         if (obj.getClass().getName().equals("burp.Zxuh")) {
             try {
                 Field zwField = obj.getClass().getDeclaredField("Zw");
@@ -592,6 +918,7 @@ public class RepeaterBridge {
             } catch (Throwable ignored) {}
             return obj;
         }
+
         return obj;
     }
 
