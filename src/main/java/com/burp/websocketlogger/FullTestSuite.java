@@ -926,13 +926,19 @@ public class FullTestSuite {
         check(repeaterTestEntry.getPayload() != null && repeaterTestEntry.getPayload().length() > 0, "LogEntry has valid byte payload for Decoder/Comparer");
         check(repeaterTestEntry.getPayloadText().equals("{\"action\":\"test\"}"), "LogEntry string representation matches for Decoder/Comparer");
 
-        // Verify Help Dialog can construct and display without errors if not headless
+        // --- TEST 13: ExportDialog Construction & Scope Logic ---
         if (!GraphicsEnvironment.isHeadless()) {
+            List<WebSocketLogEntry> testExportList = new ArrayList<>();
+            testExportList.add(repeaterTestEntry);
+            com.burp.websocketlogger.ui.ExportDialog exportDlg = new com.burp.websocketlogger.ui.ExportDialog(mockApi, scrollTab.getTableModel(), testExportList);
+            check(exportDlg.getTitle().equals("Export WebSocket Logs"), "ExportDialog title matches");
+            exportDlg.dispose();
+
             QueryHelpDialog helpDialog = new QueryHelpDialog(null);
             check(helpDialog.getTitle().contains("Query Syntax Guide"), "QueryHelpDialog title matches");
             helpDialog.dispose();
         } else {
-            System.out.println("[SKIP] QueryHelpDialog GUI test skipped in headless mode");
+            System.out.println("[SKIP] GUI dialog tests skipped in headless mode");
         }
     }
 

@@ -723,6 +723,13 @@ public class WebSocketLoggerTab extends JPanel {
         });
         popupMenu.add(deleteItem);
 
+        popupMenu.addSeparator();
+
+        // Export item in context menu
+        JMenuItem exportContextItem = new JMenuItem("Export Selected / Logs...");
+        exportContextItem.addActionListener(e -> showExportDialog());
+        popupMenu.add(exportContextItem);
+
         table.addMouseListener(new MouseAdapter() {
             @Override
             public void mousePressed(MouseEvent e) {
@@ -747,25 +754,28 @@ public class WebSocketLoggerTab extends JPanel {
     }
 
     private void showExportDialog() {
-        JFileChooser chooser = new JFileChooser();
-        chooser.setDialogTitle("Export WebSocket Logs");
-        int res = chooser.showSaveDialog(this);
-        if (res == JFileChooser.APPROVE_OPTION) {
-            File file = chooser.getSelectedFile();
-            List<WebSocketLogEntry> entries = tableModel.getFilteredEntries();
-            try {
-                if (file.getName().toLowerCase().endsWith(".json")) {
-                    LogExporter.exportToJson(file, entries);
-                } else {
-                    if (!file.getName().toLowerCase().endsWith(".csv")) {
-                        file = new File(file.getAbsolutePath() + ".csv");
-                    }
-                    LogExporter.exportToCsv(file, entries);
-                }
-                JOptionPane.showMessageDialog(this, "Successfully exported " + entries.size() + " entries!", "Export Complete", JOptionPane.INFORMATION_MESSAGE);
-            } catch (Exception ex) {
-                JOptionPane.showMessageDialog(this, "Error exporting file: " + ex.getMessage(), "Export Error", JOptionPane.ERROR_MESSAGE);
-            }
+        if (tableModel.getTotalCount() == 0) {
+            JOptionPane.showMessageDialog(
+                    this,
+                    "No log entries available to export.\nThe log is currently empty.",
+                    "Export WebSocket Logs",
+                    JOptionPane.INFORMATION_MESSAGE
+            );
+            return;
+        }
+
+        List<WebSocketLogEntry> selected = new ArrayList<>();
+        int[] rows = table.getSelectedRows();
+        for (int r : rows) {
+            WebSocketLogEntry entry = tableModel.getEntryAt(table.convertRowIndexToModel(r));
+            if (entry != null) selected.add(entry);
+        }
+
+        try {
+            ExportDialog dialog = new ExportDialog(api, tableModel, selected);
+            dialog.setVisible(true);
+        } catch (Exception ex) {
+            JOptionPane.showMessageDialog(this, "Could not open export dialog: " + ex.getMessage(), "Export Error", JOptionPane.ERROR_MESSAGE);
         }
     }
 
