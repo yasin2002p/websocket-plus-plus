@@ -3,20 +3,38 @@ $ErrorActionPreference = "Stop"
 
 Write-Host "[+] Compiling WebSocket++..." -ForegroundColor Cyan
 
-$burpJar = "burpsuite_pro.jar"
-if (-not (Test-Path $burpJar)) {
-    Write-Error "Burp Suite JAR not found at: $burpJar"
+# Locate Burp Suite JAR dynamically without hardcoding personal paths
+$candidateBurpJars = @(
+    $env:BURP_JAR,
+    "C:\Program Files\BurpSuitePro\burpsuite_pro.jar",
+    (Join-Path $env:USERPROFILE "BurpSuitePro\burpsuite_pro.jar"),
+    (Join-Path $PSScriptRoot "burpsuite_pro.jar")
+) | Where-Object { $_ -and (Test-Path $_) }
+
+if (-not $candidateBurpJars) {
+    $foundJars = Get-ChildItem -Path (Join-Path $env:USERPROFILE "Desktop") -Recurse -Filter "burpsuite_pro*.jar" -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty FullName
+    if ($foundJars) {
+        $candidateBurpJars = @($foundJars)
+    }
+}
+
+$burpJar = $candidateBurpJars | Select-Object -First 1
+
+if (-not $burpJar) {
+    Write-Error "Burp Suite JAR not found. Please set `$env:BURP_JAR or place burpsuite_pro.jar in the project directory."
     exit 1
 }
 
-$jdkPath = "C:\Program Files\Java\jdk-22\bin"
-$javac = Join-Path $jdkPath "javac.exe"
-$jar = Join-Path $jdkPath "jar.exe"
-
-if (-not (Test-Path $javac)) {
-    $javac = "javac"
-    $jar = "jar"
+$jdkPath = if ($env:JAVA_HOME -and (Test-Path (Join-Path $env:JAVA_HOME "bin\javac.exe"))) {
+    Join-Path $env:JAVA_HOME "bin"
+} elseif (Test-Path "C:\Program Files\Java\jdk-22\bin\javac.exe") {
+    "C:\Program Files\Java\jdk-22\bin"
+} else {
+    ""
 }
+
+$javac = if ($jdkPath) { Join-Path $jdkPath "javac.exe" } else { "javac" }
+$jar = if ($jdkPath) { Join-Path $jdkPath "jar.exe" } else { "jar" }
 
 New-Item -ItemType Directory -Path "build\classes" -Force | Out-Null
 New-Item -ItemType Directory -Path "build\META-INF" -Force | Out-Null
