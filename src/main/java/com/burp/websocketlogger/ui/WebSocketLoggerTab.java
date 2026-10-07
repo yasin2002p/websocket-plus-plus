@@ -356,11 +356,22 @@ public class WebSocketLoggerTab extends JPanel {
         JSplitPane splitPane = new JSplitPane(JSplitPane.VERTICAL_SPLIT, tableScrollPane, bottomTabbedPane);
         splitPane.setResizeWeight(0.60);
         splitPane.setContinuousLayout(true);
-
         add(splitPane, BorderLayout.CENTER);
 
         // Apply Burp theme recursively
         api.userInterface().applyThemeToComponent(this);
+
+        // Auto-focus table and auto-select row when tab is shown
+        addHierarchyListener(e -> {
+            if ((e.getChangeFlags() & java.awt.event.HierarchyEvent.SHOWING_CHANGED) != 0 && isShowing()) {
+                SwingUtilities.invokeLater(() -> {
+                    if (table.getSelectedRow() == -1 && table.getRowCount() > 0) {
+                        table.setRowSelectionInterval(0, 0);
+                    }
+                    table.requestFocusInWindow();
+                });
+            }
+        });
     }
 
     private void applyQuery() {
@@ -819,7 +830,7 @@ public class WebSocketLoggerTab extends JPanel {
 
             Component focusOwner = KeyboardFocusManager.getCurrentKeyboardFocusManager().getFocusOwner();
             boolean focusInside = (focusOwner != null && SwingUtilities.isDescendingFrom(focusOwner, WebSocketLoggerTab.this));
-            if (!focusInside && focusOwner != null) {
+            if (!focusInside && focusOwner instanceof javax.swing.text.JTextComponent && ((javax.swing.text.JTextComponent) focusOwner).isEditable()) {
                 return false;
             }
 
