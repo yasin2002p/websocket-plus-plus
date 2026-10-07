@@ -124,6 +124,44 @@ public class RepeaterBridge {
     }
 
     /**
+     * Finds a method across class hierarchy and implemented interfaces and makes it accessible,
+     * resolving illegal reflection access exceptions on obfuscated/package-private Burp classes (e.g. burp.Zryy).
+     */
+    public static Method findMethod(Class<?> clazz, String methodName, Class<?>... paramTypes) {
+        if (clazz == null) return null;
+        Class<?> curr = clazz;
+        while (curr != null && curr != Object.class) {
+            try {
+                Method m = curr.getDeclaredMethod(methodName, paramTypes);
+                m.setAccessible(true);
+                return m;
+            } catch (NoSuchMethodException ignored) {}
+            curr = curr.getSuperclass();
+        }
+        for (Class<?> iface : clazz.getInterfaces()) {
+            try {
+                Method m = iface.getDeclaredMethod(methodName, paramTypes);
+                m.setAccessible(true);
+                return m;
+            } catch (NoSuchMethodException ignored) {}
+        }
+        // Fallback: match by name and parameter count
+        for (Method m : clazz.getMethods()) {
+            if (m.getName().equals(methodName) && m.getParameterCount() == paramTypes.length) {
+                m.setAccessible(true);
+                return m;
+            }
+        }
+        for (Method m : clazz.getDeclaredMethods()) {
+            if (m.getName().equals(methodName) && m.getParameterCount() == paramTypes.length) {
+                m.setAccessible(true);
+                return m;
+            }
+        }
+        return null;
+    }
+
+    /**
      * Sends the WebSocket message directly to Burp Repeater as a native WebSocket tab.
      * NEVER falls back to an HTTP upgrade handshake request.
      *
@@ -176,6 +214,11 @@ public class RepeaterBridge {
         Object zk6w = findZk6w(zgcs);
 
         // 4. Load required internal classes using resolved Burp ClassLoader
+        Class<?> zgcsClass = null;
+        try {
+            zgcsClass = loadBurpClass(api, "burp.Zgcs");
+        } catch (Throwable ignored) {}
+
         Class<?> zcfClass = loadBurpClass(api, "burp.Zcf");
         Class<?> zub1Class = loadBurpClass(api, "burp.Zub1");
         Class<?> zdjClass = loadBurpClass(api, "net.portswigger.Zdj");
@@ -196,16 +239,22 @@ public class RepeaterBridge {
         Object zq3hPayload = null;
         try {
             Class<?> zz2qClass = loadBurpClass(api, "burp.Zz2q");
-            Method zkMethod = zz2qClass.getMethod("Zk", byte[].class);
-            zq3hPayload = zkMethod.invoke(null, (Object) payloadBytes);
+            Method zkMethod = findMethod(zz2qClass, "Zk", byte[].class);
+            if (zkMethod != null) {
+                zkMethod.setAccessible(true);
+                zq3hPayload = zkMethod.invoke(null, (Object) payloadBytes);
+            }
         } catch (Throwable t) {
             Class<?> zjieClass = loadBurpClass(api, "burp.Zjie");
-            Method zbConverter = zjieClass.getMethod("Zb", ByteArray.class);
-            ByteArray payload = entry.getPayload();
-            if (payload == null) {
-                payload = ByteArray.byteArray(entry.getPayloadText() != null ? entry.getPayloadText() : "");
+            Method zbConverter = findMethod(zjieClass, "Zb", ByteArray.class);
+            if (zbConverter != null) {
+                zbConverter.setAccessible(true);
+                ByteArray payload = entry.getPayload();
+                if (payload == null) {
+                    payload = ByteArray.byteArray(entry.getPayloadText() != null ? entry.getPayloadText() : "");
+                }
+                zq3hPayload = zbConverter.invoke(null, payload);
             }
-            zq3hPayload = zbConverter.invoke(null, payload);
         }
 
         // Direction enum (burp.Zub1)
@@ -240,21 +289,36 @@ public class RepeaterBridge {
                     Object zrta = zcField.get(zg_o);
                     if (zfc != null && zrta != null) {
                         Class<?> zzfcClass = loadBurpClass(api, "burp.Zzfc");
-                        Method zkMethod = zrta.getClass().getMethod("ZK", zzfcClass);
-                        Object zfni = zkMethod.invoke(zrta, zfc);
-                        if (zfni != null) {
-                            Method zofMethod = zfc.getClass().getMethod("Zof");
-                            byte rawOpcode = ((Number) zofMethod.invoke(zfc)).byteValue();
-                            Method zoqMethod = zfc.getClass().getMethod("Zoq");
-                            Object rawZdj = zoqMethod.invoke(zfc);
-                            if (rawZdj == null) {
-                                rawZdj = zdjClass.getConstructor().newInstance();
+                        Method zkMethod = findMethod(zrta.getClass(), "ZK", zzfcClass);
+                        if (zkMethod != null) {
+                            zkMethod.setAccessible(true);
+                            Object zfni = zkMethod.invoke(zrta, zfc);
+                            if (zfni != null) {
+                                Method zofMethod = findMethod(zfc.getClass(), "Zof");
+                                zofMethod.setAccessible(true);
+                                byte rawOpcode = ((Number) zofMethod.invoke(zfc)).byteValue();
+                                Method zoqMethod = findMethod(zfc.getClass(), "Zoq");
+                                zoqMethod.setAccessible(true);
+                                Object rawZdj = zoqMethod.invoke(zfc);
+                                if (rawZdj == null) {
+                                    Constructor<?> zdjCtor = zdjClass.getConstructor();
+                                    zdjCtor.setAccessible(true);
+                                    rawZdj = zdjCtor.newInstance();
+                                }
+                                Method zjMethod = findMethod(zfni.getClass(), "ZJ", byte.class, zdjClass, zub1Class, zq3hClass);
+                                zjMethod.setAccessible(true);
+                                Object zcfObj = zjMethod.invoke(zfni, rawOpcode != 0 ? rawOpcode : opcode, rawZdj, dirEnum, zq3hPayload);
+
+                                Method zbMethod = findMethod(zgcsClass != null ? zgcsClass : zgcs.getClass(), "ZB", zcfClass);
+                                if (zbMethod == null) {
+                                    zbMethod = findMethod(zgcs.getClass(), "ZB", zcfClass);
+                                }
+                                if (zbMethod != null) {
+                                    zbMethod.setAccessible(true);
+                                    zbMethod.invoke(zgcs, zcfObj);
+                                    return true;
+                                }
                             }
-                            Method zjMethod = zfni.getClass().getMethod("ZJ", byte.class, zdjClass, zub1Class, zq3hClass);
-                            Object zcfObj = zjMethod.invoke(zfni, rawOpcode != 0 ? rawOpcode : opcode, rawZdj, dirEnum, zq3hPayload);
-                            Method zbMethod = zgcs.getClass().getMethod("ZB", zcfClass);
-                            zbMethod.invoke(zgcs, zcfObj);
-                            return true;
                         }
                     }
                 }
@@ -271,11 +335,22 @@ public class RepeaterBridge {
             targetWsId = entry.getConnectionId() > 0 ? entry.getConnectionId() : 1;
         }
 
-        Object defaultZdj = zdjClass.getConstructor().newInstance();
+        Constructor<?> zdjCtor = zdjClass.getConstructor();
+        zdjCtor.setAccessible(true);
+        Object defaultZdj = zdjCtor.newInstance();
+
         Constructor<?> zcfCtor = zcfClass.getConstructor(int.class, byte.class, zdjClass, zq3hClass, zub1Class);
+        zcfCtor.setAccessible(true);
         Object zcf = zcfCtor.newInstance(targetWsId, opcode, defaultZdj, zq3hPayload, dirEnum);
 
-        Method zbMethod = zgcs.getClass().getMethod("ZB", zcfClass);
+        Method zbMethod = findMethod(zgcsClass != null ? zgcsClass : zgcs.getClass(), "ZB", zcfClass);
+        if (zbMethod == null) {
+            zbMethod = findMethod(zgcs.getClass(), "ZB", zcfClass);
+        }
+        if (zbMethod == null) {
+            throw new NoSuchMethodException("Method ZB not found on " + zgcs.getClass().getName());
+        }
+        zbMethod.setAccessible(true);
         zbMethod.invoke(zgcs, zcf);
         return true;
     }
@@ -344,18 +419,21 @@ public class RepeaterBridge {
                 zxField.setAccessible(true);
                 Object zf8u = zxField.get(zgga);
                 if (zf8u == null) {
-                    Method zq0Method = zgga.getClass().getMethod("ZQ0");
-                    if (SwingUtilities.isEventDispatchThread()) {
-                        zq0Method.invoke(zgga);
-                    } else {
-                        try {
-                            SwingUtilities.invokeAndWait(() -> {
-                                try {
-                                    zq0Method.invoke(zgga);
-                                } catch (Throwable ignored) {}
-                            });
-                        } catch (Throwable t) {
+                    Method zq0Method = findMethod(zgga.getClass(), "ZQ0");
+                    if (zq0Method != null) {
+                        zq0Method.setAccessible(true);
+                        if (SwingUtilities.isEventDispatchThread()) {
                             zq0Method.invoke(zgga);
+                        } else {
+                            try {
+                                SwingUtilities.invokeAndWait(() -> {
+                                    try {
+                                        zq0Method.invoke(zgga);
+                                    } catch (Throwable ignored) {}
+                                });
+                            } catch (Throwable t) {
+                                zq0Method.invoke(zgga);
+                            }
                         }
                     }
                 }
@@ -423,16 +501,25 @@ public class RepeaterBridge {
     private static boolean matchesConnection(Object gy8, WebSocketLogEntry entry) {
         if (gy8 == null || entry == null) return false;
         try {
-            Method zeyMethod = gy8.getClass().getMethod("Zey");
-            Object zkke = zeyMethod.invoke(gy8);
-            if (zkke != null) {
-                Method ze8 = zkke.getClass().getMethod("ZE8");
-                String h = (String) ze8.invoke(zkke);
-                if (h != null && entry.getHost() != null && h.equalsIgnoreCase(entry.getHost())) {
-                    Method zeq = zkke.getClass().getMethod("ZEQ");
-                    int p = ((Number) zeq.invoke(zkke)).intValue();
-                    if (entry.getPort() <= 0 || p == entry.getPort()) {
-                        return true;
+            Method zeyMethod = findMethod(gy8.getClass(), "Zey");
+            if (zeyMethod != null) {
+                zeyMethod.setAccessible(true);
+                Object zkke = zeyMethod.invoke(gy8);
+                if (zkke != null) {
+                    Method ze8 = findMethod(zkke.getClass(), "ZE8");
+                    if (ze8 != null) {
+                        ze8.setAccessible(true);
+                        String h = (String) ze8.invoke(zkke);
+                        if (h != null && entry.getHost() != null && h.equalsIgnoreCase(entry.getHost())) {
+                            Method zeq = findMethod(zkke.getClass(), "ZEQ");
+                            if (zeq != null) {
+                                zeq.setAccessible(true);
+                                int p = ((Number) zeq.invoke(zkke)).intValue();
+                                if (entry.getPort() <= 0 || p == entry.getPort()) {
+                                    return true;
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -457,11 +544,20 @@ public class RepeaterBridge {
             Class<?> zddClass = loadBurpClass(api, "burp.Zdd");
             Class<?> zkkeClass = loadBurpClass(api, "burp.Zkke");
 
-            Object zza2 = zza2Class.getConstructor(String.class, int.class, boolean.class).newInstance(host, port, secure);
-            Object zzab = zzabClass.getConstructor(zddClass, byte[].class).newInstance(zza2, reqBytes);
-            Method zvMethod = zk6w.getClass().getDeclaredMethod("ZV", zkkeClass);
-            zvMethod.setAccessible(true);
-            return (Integer) zvMethod.invoke(zk6w, zzab);
+            Constructor<?> zza2Ctor = zza2Class.getConstructor(String.class, int.class, boolean.class);
+            zza2Ctor.setAccessible(true);
+            Object zza2 = zza2Ctor.newInstance(host, port, secure);
+
+            Constructor<?> zzabCtor = zzabClass.getConstructor(zddClass, byte[].class);
+            zzabCtor.setAccessible(true);
+            Object zzab = zzabCtor.newInstance(zza2, reqBytes);
+
+            Method zvMethod = findMethod(zk6w.getClass(), "ZV", zkkeClass);
+            if (zvMethod != null) {
+                zvMethod.setAccessible(true);
+                return (Integer) zvMethod.invoke(zk6w, zzab);
+            }
+            return -1;
         } catch (Throwable t) {
             return -1;
         }
@@ -596,8 +692,9 @@ public class RepeaterBridge {
 
         // Check if root implements burp.Zukk (Suite controller) with method ZU()
         try {
-            Method zuMethod = root.getClass().getMethod("ZU");
-            if (zuMethod.getParameterCount() == 0) {
+            Method zuMethod = findMethod(root.getClass(), "ZU");
+            if (zuMethod != null && zuMethod.getParameterCount() == 0) {
+                zuMethod.setAccessible(true);
                 Object zgcs = zuMethod.invoke(root);
                 if (zgcs != null && isZgcsInstance(zgcs, zgcsClass)) {
                     return zgcs;
