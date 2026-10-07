@@ -329,6 +329,49 @@ public class RepeaterBridge {
         }
     }
 
+    public static Object unwrap(Object obj) {
+        if (obj == null) return null;
+        if (java.lang.reflect.Proxy.isProxyClass(obj.getClass())) {
+            try {
+                java.lang.reflect.InvocationHandler h = java.lang.reflect.Proxy.getInvocationHandler(obj);
+                if (h != null) {
+                    try {
+                        Field zeField = h.getClass().getDeclaredField("Ze");
+                        zeField.setAccessible(true);
+                        Object target = zeField.get(h);
+                        if (target != null) {
+                            return unwrap(target);
+                        }
+                    } catch (NoSuchFieldException ignored) {}
+
+                    for (Field f : h.getClass().getDeclaredFields()) {
+                        f.setAccessible(true);
+                        try {
+                            Object val = f.get(h);
+                            if (val != null && !f.getType().isPrimitive() && !f.getType().getName().startsWith("java.")) {
+                                Object unwrapped = unwrap(val);
+                                if (unwrapped != null && !java.lang.reflect.Proxy.isProxyClass(unwrapped.getClass())) {
+                                    return unwrapped;
+                                }
+                            }
+                        } catch (Throwable ignored) {}
+                    }
+                }
+            } catch (Throwable ignored) {}
+        }
+        if (obj.getClass().getName().equals("burp.Zxuh")) {
+            try {
+                Field zwField = obj.getClass().getDeclaredField("Zw");
+                zwField.setAccessible(true);
+                Object target = zwField.get(obj);
+                if (target != null) {
+                    return unwrap(target);
+                }
+            } catch (Throwable ignored) {}
+        }
+        return obj;
+    }
+
     private static Object findRepeaterController(MontoyaApi api) {
         if (api == null) return null;
 
@@ -339,34 +382,77 @@ public class RepeaterBridge {
             return null;
         }
 
-        // 1. Check api.repeater()
-        Object rep = api.repeater();
-        if (rep != null && !java.lang.reflect.Proxy.isProxyClass(rep.getClass())) {
-            Object res = searchForZgcs(rep, zgcsClass, 0, Collections.newSetFromMap(new IdentityHashMap<>()));
-            if (res != null) return res;
-        }
-
-        // 2. Check api directly
-        if (!java.lang.reflect.Proxy.isProxyClass(api.getClass())) {
-            Object resApi = searchForZgcs(api, zgcsClass, 0, Collections.newSetFromMap(new IdentityHashMap<>()));
-            if (resApi != null) return resApi;
-        }
-
-        // 3. Check api.burpSuite()
+        // 1. Direct path from api.repeater()
         try {
-            Object bs = api.burpSuite();
-            if (bs != null && !java.lang.reflect.Proxy.isProxyClass(bs.getClass())) {
-                Object resBs = searchForZgcs(bs, zgcsClass, 0, Collections.newSetFromMap(new IdentityHashMap<>()));
+            Object rep = unwrap(api.repeater());
+            if (rep != null) {
+                if (zgcsClass.isInstance(rep)) return rep;
+
+                Class<?> c = rep.getClass();
+                while (c != null && c != Object.class && !c.getName().startsWith("java.")) {
+                    for (Field f : c.getDeclaredFields()) {
+                        f.setAccessible(true);
+                        try {
+                            Object val = unwrap(f.get(rep));
+                            if (val != null) {
+                                if (zgcsClass.isInstance(val)) return val;
+
+                                Class<?> c2 = val.getClass();
+                                while (c2 != null && c2 != Object.class && !c2.getName().startsWith("java.")) {
+                                    for (Field f2 : c2.getDeclaredFields()) {
+                                        f2.setAccessible(true);
+                                        try {
+                                            Object val2 = unwrap(f2.get(val));
+                                            if (val2 != null && zgcsClass.isInstance(val2)) {
+                                                return val2;
+                                            }
+                                        } catch (Throwable ignored) {}
+                                    }
+                                    c2 = c2.getSuperclass();
+                                }
+                            }
+                        } catch (Throwable ignored) {}
+                    }
+                    c = c.getSuperclass();
+                }
+            }
+        } catch (Throwable ignored) {}
+
+        // 2. Direct path from unwrapped api
+        try {
+            Object unwrappedApi = unwrap(api);
+            if (unwrappedApi != null) {
+                Object resApi = searchForZgcs(unwrappedApi, zgcsClass, 0, Collections.newSetFromMap(new IdentityHashMap<>()));
+                if (resApi != null) return resApi;
+            }
+        } catch (Throwable ignored) {}
+
+        // 3. Direct path from unwrapped api.burpSuite()
+        try {
+            Object unwrappedBs = unwrap(api.burpSuite());
+            if (unwrappedBs != null) {
+                Object resBs = searchForZgcs(unwrappedBs, zgcsClass, 0, Collections.newSetFromMap(new IdentityHashMap<>()));
                 if (resBs != null) return resBs;
             }
-        } catch (Throwable ignored) {
-        }
+        } catch (Throwable ignored) {}
+
+        // 4. Fallback search across active Frames
+        try {
+            for (java.awt.Frame frame : java.awt.Frame.getFrames()) {
+                if (frame != null && frame.isDisplayable()) {
+                    Object resFrame = searchForZgcs(frame, zgcsClass, 0, Collections.newSetFromMap(new IdentityHashMap<>()));
+                    if (resFrame != null) return resFrame;
+                }
+            }
+        } catch (Throwable ignored) {}
 
         return null;
     }
 
     private static Object searchForZgcs(Object root, Class<?> zgcsClass, int depth, Set<Object> visited) {
-        if (root == null || depth > 4 || java.lang.reflect.Proxy.isProxyClass(root.getClass()) || visited.contains(root)) return null;
+        if (root == null || depth > 5) return null;
+        root = unwrap(root);
+        if (root == null || visited.contains(root)) return null;
         visited.add(root);
 
         if (zgcsClass.isInstance(root)) {
@@ -393,12 +479,15 @@ public class RepeaterBridge {
                 try {
                     Object val = f.get(root);
                     if (val != null) {
-                        if (zgcsClass.isInstance(val)) {
-                            return val;
-                        }
-                        Object nested = searchForZgcs(val, zgcsClass, depth + 1, visited);
-                        if (nested != null) {
-                            return nested;
+                        val = unwrap(val);
+                        if (val != null) {
+                            if (zgcsClass.isInstance(val)) {
+                                return val;
+                            }
+                            Object nested = searchForZgcs(val, zgcsClass, depth + 1, visited);
+                            if (nested != null) {
+                                return nested;
+                            }
                         }
                     }
                 } catch (Throwable ignored) {
