@@ -18,6 +18,7 @@ import javax.swing.table.TableRowSorter;
 import java.awt.*;
 import java.awt.datatransfer.StringSelection;
 import java.awt.event.ActionEvent;
+import java.awt.event.InputEvent;
 import java.awt.event.KeyEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
@@ -773,8 +774,9 @@ public class WebSocketLoggerTab extends JPanel {
         KeyStroke ctrlR = KeyStroke.getKeyStroke(KeyEvent.VK_R, menuMask);
         KeyStroke ctrlI = KeyStroke.getKeyStroke(KeyEvent.VK_I, menuMask);
 
-        // Bind on Table
+        // 1. Bind on Table (both WHEN_ANCESTOR_OF_FOCUSED_COMPONENT and WHEN_FOCUSED)
         table.getInputMap(JComponent.WHEN_ANCESTOR_OF_FOCUSED_COMPONENT).put(ctrlR, "sendToRepeater");
+        table.getInputMap(JComponent.WHEN_FOCUSED).put(ctrlR, "sendToRepeater");
         table.getActionMap().put("sendToRepeater", new AbstractAction() {
             @Override
             public void actionPerformed(ActionEvent e) {
@@ -783,6 +785,7 @@ public class WebSocketLoggerTab extends JPanel {
         });
 
         table.getInputMap(JComponent.WHEN_ANCESTOR_OF_FOCUSED_COMPONENT).put(ctrlI, "sendToIntruder");
+        table.getInputMap(JComponent.WHEN_FOCUSED).put(ctrlI, "sendToIntruder");
         table.getActionMap().put("sendToIntruder", new AbstractAction() {
             @Override
             public void actionPerformed(ActionEvent e) {
@@ -790,7 +793,7 @@ public class WebSocketLoggerTab extends JPanel {
             }
         });
 
-        // Also bind globally on this panel (WHEN_IN_FOCUSED_WINDOW)
+        // 2. Bind globally on this tab panel (WHEN_IN_FOCUSED_WINDOW)
         this.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).put(ctrlR, "sendToRepeaterGlobal");
         this.getActionMap().put("sendToRepeaterGlobal", new AbstractAction() {
             @Override
@@ -806,10 +809,49 @@ public class WebSocketLoggerTab extends JPanel {
                 sendSelectedToIntruder();
             }
         });
+
+        // 3. Global KeyEventDispatcher: Intercepts Ctrl+R and Ctrl+I directly before Burp Suite's
+        // menu accelerators can swallow them whenever this tab is active / visible.
+        KeyboardFocusManager.getCurrentKeyboardFocusManager().addKeyEventDispatcher(e -> {
+            if (!WebSocketLoggerTab.this.isShowing()) {
+                return false;
+            }
+
+            Component focusOwner = KeyboardFocusManager.getCurrentKeyboardFocusManager().getFocusOwner();
+            boolean focusInside = (focusOwner != null && SwingUtilities.isDescendingFrom(focusOwner, WebSocketLoggerTab.this));
+            if (!focusInside && focusOwner != null) {
+                return false;
+            }
+
+            if (e.getID() == KeyEvent.KEY_PRESSED) {
+                int keyCode = e.getKeyCode();
+                int modifiers = e.getModifiersEx();
+                boolean isCtrl = (modifiers & (InputEvent.CTRL_DOWN_MASK | InputEvent.META_DOWN_MASK)) != 0;
+                boolean isAltOrShift = (modifiers & (InputEvent.ALT_DOWN_MASK | InputEvent.SHIFT_DOWN_MASK)) != 0;
+
+                if (isCtrl && !isAltOrShift) {
+                    if (keyCode == KeyEvent.VK_R) {
+                        e.consume();
+                        SwingUtilities.invokeLater(this::sendSelectedToRepeater);
+                        return true;
+                    } else if (keyCode == KeyEvent.VK_I) {
+                        e.consume();
+                        SwingUtilities.invokeLater(this::sendSelectedToIntruder);
+                        return true;
+                    }
+                }
+            }
+            return false;
+        });
     }
 
     public void sendSelectedToRepeater() {
         int row = table.getSelectedRow();
+        if (row == -1 && table.getRowCount() > 0) {
+            // Auto-select first row if no row is currently focused
+            row = 0;
+            table.setRowSelectionInterval(0, 0);
+        }
         if (row != -1) {
             WebSocketLogEntry entry = tableModel.getEntryAt(table.convertRowIndexToModel(row));
             if (entry != null) {
@@ -820,6 +862,11 @@ public class WebSocketLoggerTab extends JPanel {
 
     public void sendSelectedToIntruder() {
         int row = table.getSelectedRow();
+        if (row == -1 && table.getRowCount() > 0) {
+            // Auto-select first row if no row is currently focused
+            row = 0;
+            table.setRowSelectionInterval(0, 0);
+        }
         if (row != -1) {
             WebSocketLogEntry entry = tableModel.getEntryAt(table.convertRowIndexToModel(row));
             if (entry != null) {
@@ -833,17 +880,20 @@ public class WebSocketLoggerTab extends JPanel {
         try {
             copyToClipboard(entry.getPayloadText());
             boolean nativeTab = RepeaterBridge.sendToRepeater(api, entry);
-            if (!nativeTab) {
-                JOptionPane.showMessageDialog(
-                        this,
-                        "WebSocket request sent to Repeater (Tab: WS #" + entry.getId() + ").\n" +
-                                "The frame payload has also been copied to your clipboard!",
-                        "Sent to Repeater",
-                        JOptionPane.INFORMATION_MESSAGE
-                );
+            if (api.logging() != null) {
+                if (nativeTab) {
+                    api.logging().logToOutput("WebSocket message #" + entry.getId() + " sent to native WebSocket Repeater tab.");
+                } else {
+                    api.logging().logToOutput("WebSocket message #" + entry.getId() + " sent to Repeater (Tab: WS #" + entry.getId() + ").");
+                }
             }
         } catch (Exception ex) {
-            JOptionPane.showMessageDialog(this, "Could not send to Repeater: " + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
+            if (api.logging() != null) {
+                api.logging().logToError("Could not send to Repeater: " + ex.getMessage());
+            }
+            if (isShowing()) {
+                JOptionPane.showMessageDialog(this, "Could not send to Repeater: " + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
+            }
         }
     }
 
@@ -854,31 +904,34 @@ public class WebSocketLoggerTab extends JPanel {
             HttpRequest upgradeReq = entry.getUpgradeRequest();
             if (upgradeReq != null) {
                 api.intruder().sendToIntruder(upgradeReq);
-                JOptionPane.showMessageDialog(
-                        this,
-                        "Handshake request sent to Intruder.\n" +
-                                "The frame payload has also been copied to your clipboard!",
-                        "Sent to Intruder",
-                        JOptionPane.INFORMATION_MESSAGE
-                );
+                if (api.logging() != null) {
+                    api.logging().logToOutput("WebSocket handshake request for message #" + entry.getId() + " sent to Intruder.");
+                }
             } else {
-                String host = entry.getHost() != null ? entry.getHost() : "localhost";
-                int port = entry.getPort() > 0 ? entry.getPort() : 80;
-                boolean secure = entry.getUrl() != null && entry.getUrl().toLowerCase().startsWith("wss://");
-                String path = entry.getPath() != null ? entry.getPath() : "/";
+                String host = entry.getHost() != null && !entry.getHost().isEmpty() ? entry.getHost() : "localhost";
+                int port = entry.getPort() > 0 ? entry.getPort() : (entry.isSecure() ? 443 : 80);
+                boolean secure = entry.isSecure();
+                String path = entry.getPath() != null && !entry.getPath().isEmpty() ? entry.getPath() : "/";
                 String raw = "GET " + path + " HTTP/1.1\r\nHost: " + host + "\r\n\r\n" + entry.getPayloadText();
-                HttpRequest req = HttpRequest.httpRequest(burp.api.montoya.http.HttpService.httpService(host, port, secure), raw);
-                api.intruder().sendToIntruder(req);
-                JOptionPane.showMessageDialog(
-                        this,
-                        "WebSocket request sent to Intruder.\n" +
-                                "The frame payload has also been copied to your clipboard!",
-                        "Sent to Intruder",
-                        JOptionPane.INFORMATION_MESSAGE
-                );
+                try {
+                    HttpRequest req = HttpRequest.httpRequest(burp.api.montoya.http.HttpService.httpService(host, port, secure), raw);
+                    api.intruder().sendToIntruder(req);
+                    if (api.logging() != null) {
+                        api.logging().logToOutput("WebSocket message #" + entry.getId() + " sent to Intruder as HTTP payload.");
+                    }
+                } catch (Throwable t) {
+                    if (api.logging() != null) {
+                        api.logging().logToError("Could not build Montoya fallback HttpRequest for Intruder: " + t.getMessage());
+                    }
+                }
             }
         } catch (Exception ex) {
-            JOptionPane.showMessageDialog(this, "Could not send to Intruder: " + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
+            if (api.logging() != null) {
+                api.logging().logToError("Could not send to Intruder: " + ex.getMessage());
+            }
+            if (isShowing()) {
+                JOptionPane.showMessageDialog(this, "Could not send to Intruder: " + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
+            }
         }
     }
 

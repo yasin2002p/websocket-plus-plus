@@ -29,6 +29,7 @@ public class WebSocketLogEntry {
     private volatile String comment = "";
     private volatile Color highlightColor = null;
     private final com.burp.websocketlogger.analysis.SecurityScanner.ScanResult scanResult;
+    private volatile Object rawMessage = null;
 
     public WebSocketLogEntry(
             int id,
@@ -186,5 +187,17 @@ public class WebSocketLogEntry {
 
     public String getSecurityTags() {
         return scanResult != null ? scanResult.getTagSummary() : "";
+    }
+
+    public Object getRawMessage() {
+        return rawMessage;
+    }
+
+    public void setRawMessage(Object rawMessage) {
+        this.rawMessage = rawMessage;
+    }
+
+    public boolean isSecure() {
+        return (url != null && url.toLowerCase().startsWith("wss://")) || port == 443;
     }
 }
